@@ -1,0 +1,144 @@
+// /packages/web/src/features/settings/components/ProfileSettingsForm.test.tsx
+
+import { render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { ProfileSettingsForm } from './ProfileSettingsForm';
+import { useSettingsQuery } from '../hooks/useSettingsQuery';
+import { useUpdateProfileSettingsMutation } from '../hooks/useUpdateSettingsMutation';
+
+// --- Mocks ---
+
+// Mock dos Hooks
+jest.mock('../hooks/useSettingsQuery');
+jest.mock('../hooks/useUpdateSettingsMutation');
+
+describe('ProfileSettingsForm', () => {
+  // Spies
+  const mockMutate = jest.fn();
+
+  // Dados Mock Padrão
+  const mockProfileData = {
+    profile: {
+      name: 'Barbearia do Teste',
+      phone: '(11) 99999-9999',
+      address: 'Rua dos Testes, 123',
+    },
+  };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+
+    // Setup Query (Sucesso)
+    (useSettingsQuery as jest.Mock).mockReturnValue({
+      data: mockProfileData,
+      isLoading: false,
+    });
+
+    // Setup Mutation
+    (useUpdateProfileSettingsMutation as jest.Mock).mockReturnValue({
+      mutate: mockMutate,
+      isPending: false,
+    });
+  });
+
+  // --- 1. Testes de Renderização e Loading ---
+
+  it('deve exibir o esqueleto de carregamento quando isLoading for true', () => {
+    (useSettingsQuery as jest.Mock).mockReturnValue({
+      data: null,
+      isLoading: true,
+    });
+
+    const { container } = render(<ProfileSettingsForm />);
+    
+    // Verifica se os esqueletos (elementos com classe animate-pulse do shadcn) estão presentes
+    expect(container.getElementsByClassName('animate-pulse').length).toBeGreaterThan(0);
+  });
+
+  it('deve popular os campos do formulário com os dados da query', async () => {
+    render(<ProfileSettingsForm />);
+
+    // Aguarda a população dos campos (devido ao useEffect)
+    await waitFor(() => {
+      expect(screen.getByDisplayValue('Barbearia do Teste')).toBeInTheDocument();
+      expect(screen.getByDisplayValue('(11) 99999-9999')).toBeInTheDocument();
+      expect(screen.getByDisplayValue('Rua dos Testes, 123')).toBeInTheDocument();
+    });
+  });
+
+  // --- 2. Testes de Validação e Erro (DSpP 2.16) ---
+
+  it('NÃO deve chamar a mutação se o campo Nome (obrigatório) estiver vazio', async () => {
+    const user = userEvent.setup();
+    render(<ProfileSettingsForm />);
+
+    // Aguarda carregar
+    await waitFor(() => screen.getByDisplayValue('Barbearia do Teste'));
+
+    // Limpa o campo Nome
+    const nameInput = screen.getByLabelText(/Nome do Estabelecimento/i);
+    await user.clear(nameInput);
+
+    // Tenta salvar
+    const submitButton = screen.getByText('Salvar Perfil');
+    await user.click(submitButton);
+
+    // Verificação 1: Mutação não chamada
+    expect(mockMutate).not.toHaveBeenCalled();
+
+    // Verificação 2: Mensagem de erro exibida (Texto definido no schema Zod)
+    expect(await screen.findByText('Nome do negócio é obrigatório')).toBeInTheDocument();
+  });
+
+  // --- 3. Testes de Submissão (Happy Path) ---
+
+  it('deve chamar a mutação com os dados atualizados ao submeter um formulário válido', async () => {
+    const user = userEvent.setup();
+    render(<ProfileSettingsForm />);
+
+    // Aguarda carregar
+    const nameInput = await screen.findByLabelText(/Nome do Estabelecimento/i);
+    const phoneInput = screen.getByLabelText(/Telefone/i);
+
+    // Altera os valores
+    await user.clear(nameInput);
+    await user.type(nameInput, 'Barbearia Atualizada');
+    
+    await user.clear(phoneInput);
+    await user.type(phoneInput, '(11) 88888-8888');
+
+    // Submete
+    const submitButton = screen.getByText('Salvar Perfil');
+    await user.click(submitButton);
+
+    // Verifica se a mutação foi chamada com o payload correto
+    expect(mockMutate).toHaveBeenCalledTimes(1);
+    expect(mockMutate).toHaveBeenCalledWith({
+      name: 'Barbearia Atualizada',
+      phone: '(11) 88888-8888',
+      address: 'Rua dos Testes, 123', // Endereço original mantido
+    });
+  });
+
+  it('deve mostrar estado de loading no botão durante a submissão', () => {
+    // Simula estado isPending da mutação
+    (useUpdateProfileSettingsMutation as jest.Mock).mockReturnValue({
+      mutate: mockMutate,
+      isPending: true, // <--- Simulação
+    });
+
+    render(<ProfileSettingsForm />);
+
+    // Verifica se o botão mudou o texto e está desabilitado
+    const button = screen.getByRole('button');
+    expect(button).toHaveTextContent('Salvando...');
+    expect(button).toBeDisabled();
+    
+    // Opcional: Verificar se o ícone de loader está presente
+    // (Baseado na implementação que usa Loader2 com classe animate-spin)
+    const loader = screen.queryByText((content, element) => {
+        return element?.classList.contains('animate-spin') ?? false;
+    });
+    // Nota: Testar classes css específicas pode ser frágil, mas valida a presença visual do loader
+  });
+});

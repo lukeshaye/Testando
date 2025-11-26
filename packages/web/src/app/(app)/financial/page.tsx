@@ -1,0 +1,1 @@
+export default function FinancialPage() {\n  return <div>Financial Page Stub</div>;\n}\n

@@ -1,0 +1,1 @@
+export default function ClientsPage() {\n  return <div>Clients Page Stub</div>;\n}\n

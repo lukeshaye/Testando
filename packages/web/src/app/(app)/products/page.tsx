@@ -1,0 +1,1 @@
+export default function ProductsPage() {\n  return <div>Products Page Stub</div>;\n}\n

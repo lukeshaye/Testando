@@ -1,0 +1,20 @@
+{
+  "compilerOptions": {
+    // Regras Estritas e de Módulo (Comuns a todos os pacotes)
+    "strict": true,
+    "skipLibCheck": true,
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "isolatedModules": true,
+
+    // Qualidade de Código
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+
+    // Permite "import ... from './component.ts'" (necessário para moduleResolution: "bundler")
+    "allowImportingTsExtensions": true
+  }
+  // "include", "exclude", "lib" e "jsx" são omitidos intencionalmente.
+  // Eles serão definidos nos arquivos tsconfig.json específicos de cada pacote que estender este.
+}
