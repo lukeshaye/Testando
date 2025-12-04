@@ -2,12 +2,7 @@
  * Arquivo: /packages/api/src/index.ts
  *
  * Objetivo: Entrypoint principal do Hono.
- *
- * Refatoração de: src/worker/index.ts
- *
- * Baseado no $$PLANO_DE_FEATURE$$
- * Tarefa 3.4: Entrypoint e Tipos da API
- * Fontes: [139, 140, 141, 142, 143, 144, 145, 146, 147]
+ * Baseado no $$PLANO_DE_FEATURE$$ - Tarefa 3.4
  */
 
 import { Hono } from 'hono';
@@ -27,6 +22,7 @@ import { productsRoutes } from './features/products/products.routes';
 import { appointmentsRoutes } from './features/appointments/appointments.routes';
 import { financialRoutes } from './features/financial/financial.routes';
 import { settingsRoutes } from './features/settings/settings.routes';
+import dashboardRoutes from './features/dashboard/dashboard.routes'; // [Novo]
 
 // Criar app Hono com tipos
 const app = new Hono<{ Bindings: Bindings; Variables: Variables }>();
@@ -45,6 +41,7 @@ app.route('/api/products', productsRoutes);
 app.route('/api/appointments', appointmentsRoutes);
 app.route('/api/financial', financialRoutes);
 app.route('/api/settings', settingsRoutes);
+app.route('/api/dashboard', dashboardRoutes); // [Novo]
 
 // Exportar app
 export default app;
