@@ -2,7 +2,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { eq } from 'drizzle-orm';
 import { getClients, createClient } from './clients.handlers';
-import { clients } from '../../db/schema'; // Assumindo importação do schema (Módulo 2)
+import { clients } from '@db/schema'; // Assumindo importação do schema (Módulo 2)
 import { AuthUser } from '../../core/auth.adapter';
 import { Context } from 'hono';
 

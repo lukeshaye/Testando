@@ -1,7 +1,7 @@
 {
   "name": "monorepo-raiz",
   "private": true,
-  "packageManager": "npm@11.6.1",
+  "packageManager": "npm@11.6.2",
   "scripts": {
     "build": "turbo build",
     "dev": "turbo dev",

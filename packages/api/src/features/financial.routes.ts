@@ -6,9 +6,9 @@
  * Este arquivo define as rotas Hono para a feature 'financial'.
  *
  * Princípios Aplicados:
- * - [cite_start]SoC (2.5)[cite: 101]: Este arquivo é responsável apenas pelo roteamento
+ * - SoC (2.5)[cite: 101]: Este arquivo é responsável apenas pelo roteamento
  * e pela aplicação de middlewares específicos da rota (autenticação e validação).
- * - [cite_start]DSpP (2.16)[cite: 103]: Utiliza o zValidator para garantir que os dados de
+ * - DSpP (2.16)[cite: 103]: Utiliza o zValidator para garantir que os dados de
  * entrada (payloads JSON) estejam em conformidade com os schemas Zod
  * definidos no Módulo 1, antes de chegarem aos handlers.
  */
@@ -17,7 +17,7 @@ import { Hono } from 'hono';
 import { zValidator } from '@hono/zod-validator';
 import { authMiddleware } from '../../core/auth';
 import {
-  [cite_start]// Importa os handlers (lógica) [cite: 104]
+// Importa os handlers (lógica) [cite: 104]
   getFinancialTransactions,
   getFinancialTransactionById,
   createFinancialTransaction,
@@ -25,7 +25,7 @@ import {
   deleteFinancialTransaction,
 } from './financial.handlers';
 import {
-  [cite_start]// Importa os schemas Zod do Módulo 1 [cite: 103]
+// Importa os schemas Zod do Módulo 1 [cite: 103]
   CreateFinancialTransactionSchema,
   UpdateFinancialTransactionSchema,
 } from '@shared/types'; // (Assume-se que estes tipos vêm do Módulo 1)
@@ -33,7 +33,7 @@ import {
 // Cria uma nova instância do Hono para este grupo de rotas
 const financialRoutes = new Hono();
 
-[cite_start]// Aplica o middleware de autenticação a TODAS as rotas de 'financial' [cite: 102]
+// Aplica o middleware de autenticação a TODAS as rotas de 'financial' [cite: 102]
 financialRoutes.use('*', authMiddleware);
 
 // --- Definição das Rotas ---
@@ -53,7 +53,7 @@ financialRoutes.get('/:id', getFinancialTransactionById);
 /**
  * POST /financial
  * Cria um novo lançamento financeiro.
- * [cite_start]Aplica validação Zod ao corpo da requisição[cite: 103].
+ * Aplica validação Zod ao corpo da requisição[cite: 103].
  */
 financialRoutes.post(
   '/',
@@ -64,7 +64,7 @@ financialRoutes.post(
 /**
  * PUT /financial/:id
  * Atualiza um lançamento financeiro existente.
- * [cite_start]Aplica validação Zod ao corpo da requisição[cite: 103].
+ * Aplica validação Zod ao corpo da requisição[cite: 103].
  */
 financialRoutes.put(
   '/:id',

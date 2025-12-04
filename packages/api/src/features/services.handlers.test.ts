@@ -3,11 +3,11 @@
  *
  * (Executor: Implementando estritamente o $$PLANO_DE_FEATURE$$)
  *
- * [cite_start]O Quê (Lógica): Testes unitários para os handlers de 'services'. [cite: 124]
+ * O Quê (Lógica): Testes unitários para os handlers de 'services'. [cite: 124]
  * Como (Princípios):
- * - [cite_start]PTE (2.15): Mockar c.var.db (Drizzle mockado) e c.var.user. [cite: 126]
- * - [cite_start]Testar se getServices chama db.select().from(services)... [cite: 127, 137]
- * - [cite_start]Testar se createService chama db.insert(services)... [cite: 128, 137]
+ * - PTE (2.15): Mockar c.var.db (Drizzle mockado) e c.var.user. [cite: 126]
+ * - Testar se getServices chama db.select().from(services)... [cite: 127, 137]
+ * - Testar se createService chama db.insert(services)... [cite: 128, 137]
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -30,15 +30,20 @@ vi.mock('@repo/db/schema', () => ({
   },
 }));
 
-// Mock dos operadores Drizzle
-const mockEq = vi.fn((a, b) => `(${a} eq ${b})`);
-const mockAnd = vi.fn((...args) => args.join(' and '));
+// Mock dos operadores Drizzle usando hoisted para evitar problemas de hoisting
+const { mockEq, mockAnd } = vi.hoisted(() => {
+  return {
+    mockEq: vi.fn((a, b) => `(${a} eq ${b})`),
+    mockAnd: vi.fn((...args) => args.join(' and ')),
+  };
+});
+
 vi.mock('drizzle-orm', () => ({
   eq: mockEq,
   and: mockAnd,
 }));
 
-[cite_start]// Mock do Drizzle Client Chain [cite: 126]
+// Mock do Drizzle Client Chain [cite: 126]
 const mockDb = {
   select: vi.fn().mockReturnThis(),
   from: vi.fn().mockReturnThis(),
@@ -51,7 +56,7 @@ const mockDb = {
   returning: vi.fn(),
 };
 
-[cite_start]// Mock do usuário [cite: 126]
+// Mock do usuário [cite: 126]
 const mockUser = {
   id: 'user-test-123',
   email: 'test@example.com',
@@ -91,7 +96,7 @@ describe('Services Handlers', () => {
     mockDb.delete.mockReturnThis();
   });
 
-  [cite_start]// Teste [cite: 127]
+// Teste [cite: 127]
   it('getServices: deve chamar db.select com filtro de usuário', async () => {
     const mockData = [{ id: 's1', name: 'Service 1' }];
     mockDb.where.mockResolvedValue(mockData);
@@ -133,7 +138,7 @@ describe('Services Handlers', () => {
     expect(response.data).toEqual(mockData);
   });
 
-  [cite_start]// Teste [cite: 128]
+// Teste [cite: 128]
   it('createService: deve chamar db.insert com dados validados e userId', async () => {
     const newService = { name: 'New Service', duration: 30, price: 50.0 };
     const returnedService = { ...newService, id: 's-new', userId: mockUser.id };
@@ -149,7 +154,7 @@ describe('Services Handlers', () => {
     });
     expect(mockDb.values).toHaveBeenCalledWith({
       ...newService,
-      [cite_start]userId: mockUser.id, // [cite: 137]
+userId: mockUser.id, // [cite: 137]
     });
     expect(mockDb.returning).toHaveBeenCalled();
     expect(response.status).toBe(201);

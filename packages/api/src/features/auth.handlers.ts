@@ -9,9 +9,9 @@ import { Variables } from '../../types';
 export const signInHandler = async (c: Context<{ Variables: Variables }>) => {
   try {
     const credentials = c.req.valid('json');
-    const authAdapter = c.var.authAdapter; [cite_start]// [cite: 133]
+    const authAdapter = c.var.authAdapter; // [cite: 133]
 
-    const result = await authAdapter.signIn(credentials); [cite_start]// [cite: 133]
+    const result = await authAdapter.signIn(credentials); // [cite: 133]
 
     if (!result) {
       return c.json({ error: 'Invalid email or password' }, 401);
@@ -31,12 +31,12 @@ export const signInHandler = async (c: Context<{ Variables: Variables }>) => {
 export const signUpHandler = async (c: Context<{ Variables: Variables }>) => {
   try {
     const credentials = c.req.valid('json');
-    const authAdapter = c.var.authAdapter; [cite_start]// [cite: 133]
+    const authAdapter = c.var.authAdapter; // [cite: 133]
 
-    const result = await authAdapter.signUp(credentials); [cite_start]// [cite: 133]
+    const result = await authAdapter.signUp(credentials); // [cite: 133]
 
     if (!result) {
-      [cite_start]// [cite: 39] O adaptador retorna null em caso de falha
+// [cite: 39] O adaptador retorna null em caso de falha
       return c.json({ error: 'Could not create user' }, 400);
     }
 

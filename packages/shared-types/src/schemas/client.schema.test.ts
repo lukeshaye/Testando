@@ -7,8 +7,8 @@ describe('ClientSchema', () => {
     name: 'João da Silva',
     email: 'joao.silva@example.com',
     phone: '11999998888',
-    birth_date: '1990-01-15T00:00:00.000Z',
-    gender: 'masculino',
+    birth_date: '1990-01-15', // Ajustado para formato YYYY-MM-DD (Date string simples)
+    gender: 'masculino', // Valores aceitos: 'masculino', 'feminino', 'outro'
     how_found: 'indicação',
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
@@ -36,12 +36,15 @@ describe('ClientSchema', () => {
   });
 
   it('deve falhar se a data de nascimento for futura', () => {
-    const futureDate = new Date();
-    futureDate.setDate(futureDate.getDate() + 1);
+    // Cria uma data futura baseada no formato string esperado
+    const today = new Date();
+    const futureDate = new Date(today);
+    futureDate.setDate(today.getDate() + 5);
+    const futureDateString = futureDate.toISOString().split('T')[0];
 
     const invalidData = {
       ...validClientData,
-      birth_date: futureDate.toISOString(),
+      birth_date: futureDateString,
     };
     const result = ClientSchema.safeParse(invalidData);
     expect(result.success).toBe(false);
@@ -63,8 +66,8 @@ describe('CreateClientSchema', () => {
     name: 'Maria Souza',
     email: 'maria.souza@example.com',
     phone: '21988887777',
-    birth_date: '1985-05-20T00:00:00.000Z',
-    gender: 'feminino',
+    birth_date: '1985-05-20', // Ajustado para formato YYYY-MM-DD
+    gender: 'feminino', // Valores aceitos: 'masculino', 'feminino', 'outro'
     how_found: 'google',
   };
 

@@ -13,7 +13,7 @@
 import { Context } from 'hono';
 import { eq } from 'drizzle-orm';
 import { Variables } from '../../types';
-import { products } from '../../db/schema'; // Assumindo que o schema do Módulo 2 está em 'db/schema'
+import { products } from '@db/schema'; // Assumindo que o schema do Módulo 2 está em 'db/schema'
 
 type HandlerContext = Context<{ Variables: Variables }>;
 

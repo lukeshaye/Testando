@@ -1,46 +1,50 @@
 import { z } from 'zod';
 
-[cite_start]// Regex para validar formato HH:MM [cite: 54]
-export const TIME_REGEX = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/;
+// Regex para validar formato HH:MM (estrito: exige 2 dígitos para hora)
+// Princípio 2.16 (DSpP): Zero Trust - rejeita formatos ambíguos como "9:00"
+export const TIME_REGEX = /^([01][0-9]|2[0-3]):[0-5][0-9]$/;
 
 /**
  * Schema para criação de um novo profissional.
  * Não inclui campos gerenciados pelo banco (id, created_at, updated_at).
  */
 export const CreateProfessionalSchema = z.object({
-  [cite_start]name: z.string().min(1, 'Nome do profissional é obrigatório'), // [cite: 56]
+  name: z.string().min(1, 'Nome do profissional é obrigatório'),
   email: z.string().email({ message: 'Email inválido' }),
   phone: z.string().nullable().or(z.literal('')),
   color: z
     .string()
     .regex(/^#[0-9a-fA-F]{6}$/, {
       message: 'Cor deve estar no formato hexadecimal #RRGGBB',
-    [cite_start]}), // [cite: 57]
-  salary: z
+    }),
+  
+  // Aplicação de Coerção para robustez com formulários HTML
+  salary: z.coerce
     .number()
-    [cite_start].positive({ message: 'Salário deve ser um valor positivo' }), // [cite: 58]
-  commission_rate: z
+    .positive({ message: 'Salário deve ser um valor positivo' }),
+  
+  commission_rate: z.coerce
     .number()
-    [cite_start].min(0, 'Comissão não pode ser negativa') // [cite: 59]
-    [cite_start].max(100, 'Comissão não pode exceder 100'), // [cite: 59]
+    .min(0, 'Comissão não pode ser negativa')
+    .max(100, 'Comissão não pode exceder 100'),
 
-  [cite_start]// Campos adicionados conforme correção arquitetural (migrations/12.sql) [cite: 49]
+  // Campos de horário de trabalho
   work_start_time: z
     .string()
     .regex(TIME_REGEX, { message: 'Formato HH:MM inválido' })
-    [cite_start].nullable(), // [cite: 50]
+    .nullable(),
   work_end_time: z
     .string()
     .regex(TIME_REGEX, { message: 'Formato HH:MM inválido' })
-    [cite_start].nullable(), // [cite: 51]
+    .nullable(),
   lunch_start_time: z
     .string()
     .regex(TIME_REGEX, { message: 'Formato HH:MM inválido' })
-    [cite_start].nullable(), // [cite: 52]
+    .nullable(),
   lunch_end_time: z
     .string()
     .regex(TIME_REGEX, { message: 'Formato HH:MM inválido' })
-    [cite_start].nullable(), // [cite: 53]
+    .nullable(),
 });
 
 /**

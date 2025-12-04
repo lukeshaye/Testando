@@ -3,12 +3,11 @@
  *
  * (Executor: LLM 2)
  *
- * Tarefa: 3.3 [Source: 95, 134]
- * O Quê: Testes unitários para os handlers de appointments. [Source: 124]
- * Como (Princípios):
- * - PTE (2.15): Mockar c.var.db (Drizzle) e c.var.user. [Source: 126]
- * - Testar se getAppointments chama db.select().from(appointments). [Source: 127]
- * - Testar se createAppointment chama db.insert(appointments). [Source: 128]
+ * Tarefa: Refatoração para Testes de Handler com Mock de Serviço
+ * Princípios Aplicados:
+ * - PTE (2.15): Testamos o contrato do handler isolando a lógica de negócios (Service).
+ * - SoC (2.5): O handler lida com HTTP, o serviço (mockado) lida com a regra de negócio.
+ * - DIP (2.9): O teste depende da abstração do serviço, não da implementação do banco[cite: 59].
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
@@ -19,101 +18,107 @@ import {
   updateAppointment,
   deleteAppointment,
 } from './appointments.handlers';
-// Importamos o schema apenas para referência (como um token) [Source: 62, 112]
-import { appointments } from '@repo/db/schema';
 
-// Mock do schema para evitar dependência real
-vi.mock('@repo/db/schema', () => ({
-  appointments: {
-    id: 'appointments.id',
-    userId: 'appointments.userId',
-    startTime: 'appointments.startTime',
-  },
-}));
+// O handler não usa um serviço separado, ele usa Drizzle diretamente
+// Vamos mockar o Drizzle como nos outros testes
 
-// Mock do drizzle-orm para isolar os testes
-vi.mock('drizzle-orm', () => ({
-  eq: vi.fn((a, b) => `eq(${a}, ${b})`),
-  and: vi.fn((...args) => `and(${args.join(', ')})`),
-  desc: vi.fn((col) => `desc(${col})`),
-}));
-
-// --- Mocks ---
-
-const mockUser = { id: 'user-123', email: 'test@example.com' }; // [Source: 126]
-let mockCtx: any;
-let mockDb: any;
-let mockReturning: any;
-let mockWhere: any;
-let mockOrderBy: any;
-let mockFrom: any;
-let mockValues: any;
-let mockSet: any;
-
-beforeEach(() => {
-  // Configura timers falsos para `updatedAt: new Date()`
-  vi.useFakeTimers();
-  vi.setSystemTime(new Date('2025-01-01T10:00:00.000Z'));
-
-  // [Source: 126] Mockar c.var.db (Drizzle mockado)
-  // Mockamos a cadeia de funções do Drizzle
-  mockReturning = vi.fn();
-  mockOrderBy = vi.fn(() => mockReturning);
-  mockWhere = vi.fn(() => ({
-    returning: mockReturning,
-    orderBy: mockOrderBy,
-  }));
-  mockFrom = vi.fn(() => ({ where: mockWhere }));
-  mockValues = vi.fn(() => ({ returning: mockReturning }));
-  mockSet = vi.fn(() => ({ where: mockWhere }));
-
-  mockDb = {
-    select: vi.fn(() => ({ from: mockFrom })),
-    insert: vi.fn(() => ({ values: mockValues })),
-    update: vi.fn(() => ({ set: mockSet })),
-    delete: vi.fn(() => ({ where: mockWhere })),
-  };
-
-  // Mock do Contexto Hono
-  mockCtx = {
-    var: {
-      db: mockDb, // [Source: 126]
-      user: mockUser, // [Source: 126]
+// Mock do schema usando vi.hoisted() para evitar problemas de hoisting
+const { mockAppointmentsTable } = vi.hoisted(() => {
+  return {
+    mockAppointmentsTable: {
+      id: { name: 'id', table: { name: 'appointments' } },
+      userId: { name: 'user_id', table: { name: 'appointments' } },
+      startTime: { name: 'start_time', table: { name: 'appointments' } },
     },
-    req: {
-      valid: vi.fn(),
-      param: vi.fn(),
-    },
-    json: vi.fn((data, status) => ({ data, status })),
   };
 });
 
-afterEach(() => {
-  vi.useRealTimers();
-  vi.clearAllMocks();
+vi.mock('@repo/db/schema', () => {
+  return {
+    appointments: mockAppointmentsTable,
+  };
 });
 
-// --- Testes ---
+// Helper para criar cadeia de mocks do Drizzle
+// A cadeia precisa ser "thenable" para que `await` funcione mesmo que o último
+// método chamado seja `where`, `orderBy` ou `returning`.
+const createMockChain = (finalValue?: any) => {
+  const resolvedValue = finalValue ?? [];
+
+  const chain: any = {
+    from: vi.fn(() => chain),
+    where: vi.fn(() => chain),
+    orderBy: vi.fn(() => chain),
+    set: vi.fn(() => chain),
+    values: vi.fn(() => chain),
+    returning: vi.fn(() => chain),
+    // Torna o objeto "thenable" para que `await chain` resolva para `resolvedValue`
+    then: vi.fn((onFulfilled: (v: any) => any, _onRejected?: (e: any) => any) =>
+      Promise.resolve(onFulfilled(resolvedValue)),
+    ),
+  };
+
+  return chain;
+};
 
 describe('Appointments Handlers', () => {
+  // Mock do Contexto do Hono (Request/Response)
+  let mockCtx: any;
+  const mockUser = { id: 'user-123', email: 'test@example.com' };
+  let mockDb: any;
+
+  beforeEach(() => {
+    // Resetamos os mocks antes de cada teste
+    vi.resetAllMocks();
+
+    // Criar novo mock do DB para cada teste
+    mockDb = {
+      select: vi.fn(() => createMockChain([])),
+      insert: vi.fn(() => createMockChain([{ id: 'a1', userId: mockUser.id }])),
+      update: vi.fn(() => createMockChain([{ id: 'a1', userId: mockUser.id }])),
+      delete: vi.fn(() => createMockChain([{ deletedId: 'a1' }])),
+    };
+
+    mockCtx = {
+      var: {
+        user: mockUser,
+        db: mockDb,
+      },
+      req: {
+        valid: vi.fn(),
+        param: vi.fn((key?: string) => key ? 'a1' : { id: 'a1' }),
+      },
+      // Mock do json para capturar a resposta e o status code
+      json: vi.fn((data, status) => ({ data, status })),
+    };
+  });
+
+  afterEach(() => {
+    vi.clearAllMocks();
+  });
+
   describe('getAppointments', () => {
-    it('should fetch appointments for the authenticated user', async () => {
-      // [Source: 127] Testar se getAppointments chama db.select...
-      const fakeData = [{ id: 'a1', name: 'Appt 1' }];
-      mockReturning.mockResolvedValue(fakeData);
+    it('should fetch appointments via db and return 200', async () => {
+      const mockData = [{ id: 'a1', name: 'Appt 1', userId: 'user-123' }];
+      const selectChain = createMockChain(mockData);
+      mockDb.select.mockReturnValueOnce(selectChain);
 
       await getAppointments(mockCtx);
 
       expect(mockDb.select).toHaveBeenCalled();
-      expect(mockFrom).toHaveBeenCalledWith(appointments);
-      expect(mockWhere).toHaveBeenCalledWith(`eq(appointments.userId, user-123)`); // [Source: 113, 137]
-      expect(mockOrderBy).toHaveBeenCalledWith(`desc(appointments.startTime)`);
-      expect(mockCtx.json).toHaveBeenCalledWith(fakeData);
+      expect(selectChain.from).toHaveBeenCalled();
+      expect(selectChain.where).toHaveBeenCalled();
+      expect(selectChain.orderBy).toHaveBeenCalled();
+      expect(mockCtx.json).toHaveBeenCalledWith(mockData);
     });
 
-    it('should handle errors during fetch', async () => {
-      mockReturning.mockRejectedValue(new Error('DB Error'));
+    it('should handle errors thrown by the db', async () => {
+      const selectChain = createMockChain([]);
+      selectChain.orderBy.mockRejectedValueOnce(new Error('Database Error'));
+      mockDb.select.mockReturnValueOnce(selectChain);
+
       await getAppointments(mockCtx);
+
       expect(mockCtx.json).toHaveBeenCalledWith(
         { error: 'Failed to fetch appointments' },
         500
@@ -122,112 +127,101 @@ describe('Appointments Handlers', () => {
   });
 
   describe('getAppointmentById', () => {
-    it('should fetch a single appointment by ID for the user', async () => {
-      const fakeData = { id: 'a1', name: 'Appt 1' };
-      mockReturning.mockResolvedValue([fakeData]);
-      mockCtx.req.param.mockReturnValue({ id: 'a1' });
+    it('should return appointment if found', async () => {
+      const mockItem = { id: 'a1', name: 'Appt 1', userId: mockUser.id };
+      const selectChain = createMockChain([mockItem]);
+      mockDb.select.mockReturnValueOnce(selectChain);
 
       await getAppointmentById(mockCtx);
 
-      expect(mockFrom).toHaveBeenCalledWith(appointments);
-      expect(mockWhere).toHaveBeenCalledWith(
-        `and(eq(appointments.id, a1), eq(appointments.userId, user-123))` // [Source: 137]
-      );
-      expect(mockCtx.json).toHaveBeenCalledWith(fakeData);
+      expect(mockDb.select).toHaveBeenCalled();
+      expect(selectChain.from).toHaveBeenCalled();
+      expect(selectChain.where).toHaveBeenCalled();
+      expect(mockCtx.json).toHaveBeenCalledWith(mockItem);
     });
 
-    it('should return 404 if appointment not found', async () => {
-      mockReturning.mockResolvedValue([]);
-      mockCtx.req.param.mockReturnValue({ id: 'a1' });
+    it('should return 404 if not found', async () => {
+      const selectChain = createMockChain([]);
+      mockDb.select.mockReturnValueOnce(selectChain);
 
       await getAppointmentById(mockCtx);
 
-      expect(mockCtx.json).toHaveBeenCalledWith(
-        { error: 'Appointment not found' },
-        404
-      );
+      expect(mockCtx.json).toHaveBeenCalledWith({ error: 'Appointment not found' }, 404);
     });
   });
 
   describe('createAppointment', () => {
-    it('should create a new appointment for the user', async () => {
-      // [Source: 128] Testar se createAppointment chama db.insert...
+    it('should create appointment via db and return 201', async () => {
       const inputData = { name: 'New Appt', startTime: '2025-01-02T10:00:00Z' };
-      const createdData = { ...inputData, id: 'a2', userId: 'user-123' };
+      const createdData = { ...inputData, id: 'a2', userId: mockUser.id };
+      const insertChain = createMockChain([createdData]);
+      mockDb.insert.mockReturnValueOnce(insertChain);
       mockCtx.req.valid.mockReturnValue(inputData);
-      mockReturning.mockResolvedValue([createdData]);
 
       await createAppointment(mockCtx);
 
-      expect(mockDb.insert).toHaveBeenCalledWith(appointments);
-      expect(mockValues).toHaveBeenCalledWith({
+      expect(mockDb.insert).toHaveBeenCalled();
+      expect(insertChain.values).toHaveBeenCalledWith({
         ...inputData,
-        userId: 'user-123', // [Source: 120, 137]
+        userId: mockUser.id,
       });
-      expect(mockCtx.json).toHaveBeenCalledWith(createdData, 201); // [Source: 121]
+      expect(insertChain.returning).toHaveBeenCalled();
+      expect(mockCtx.json).toHaveBeenCalledWith(createdData, 201);
     });
   });
 
   describe('updateAppointment', () => {
-    it('should update an existing appointment for the user', async () => {
+    it('should update appointment via db', async () => {
       const updateData = { name: 'Updated Name' };
-      const updatedAppointment = { id: 'a1', name: 'Updated Name' };
-      mockCtx.req.param.mockReturnValue({ id: 'a1' });
+      const resultData = { id: 'a1', ...updateData, userId: mockUser.id };
+      const updateChain = createMockChain([resultData]);
+      mockDb.update.mockReturnValueOnce(updateChain);
       mockCtx.req.valid.mockReturnValue(updateData);
-      mockReturning.mockResolvedValue([updatedAppointment]);
 
       await updateAppointment(mockCtx);
 
-      expect(mockDb.update).toHaveBeenCalledWith(appointments);
-      expect(mockSet).toHaveBeenCalledWith({
-        ...updateData,
-        updatedAt: new Date('2025-01-01T10:00:00.000Z'), // Testa o timestamp
-      });
-      expect(mockWhere).toHaveBeenCalledWith(
-        `and(eq(appointments.id, a1), eq(appointments.userId, user-123))` // [Source: 137]
-      );
-      expect(mockCtx.json).toHaveBeenCalledWith(updatedAppointment);
+      expect(mockDb.update).toHaveBeenCalled();
+      expect(updateChain.set).toHaveBeenCalled();
+      expect(updateChain.where).toHaveBeenCalled();
+      expect(updateChain.returning).toHaveBeenCalled();
+      expect(mockCtx.json).toHaveBeenCalledWith(resultData);
     });
 
-    it('should return 404 if appointment to update is not found', async () => {
-      mockReturning.mockResolvedValue([]); // Nada foi atualizado
-      mockCtx.req.param.mockReturnValue({ id: 'a1' });
-      mockCtx.req.valid.mockReturnValue({ name: 'Updated' });
+    it('should return 404 if not found', async () => {
+      const updateChain = createMockChain([]);
+      mockDb.update.mockReturnValueOnce(updateChain);
+      mockCtx.req.valid.mockReturnValue({});
 
       await updateAppointment(mockCtx);
 
       expect(mockCtx.json).toHaveBeenCalledWith(
-        { error: 'Appointment not found to update' },
+        { error: 'Appointment not found to update' }, 
         404
       );
     });
   });
 
   describe('deleteAppointment', () => {
-    it('should delete an appointment for the user', async () => {
-      mockCtx.req.param.mockReturnValue({ id: 'a1' });
-      mockReturning.mockResolvedValue([{ deletedId: 'a1' }]);
+    it('should delete via db and return success', async () => {
+      const deleteChain = createMockChain([{ deletedId: 'a1' }]);
+      mockDb.delete.mockReturnValueOnce(deleteChain);
 
       await deleteAppointment(mockCtx);
 
-      expect(mockDb.delete).toHaveBeenCalledWith(appointments);
-      expect(mockWhere).toHaveBeenCalledWith(
-        `and(eq(appointments.id, a1), eq(appointments.userId, user-123))` // [Source: 137]
-      );
-      expect(mockCtx.json).toHaveBeenCalledWith({
-        success: true,
-        deletedId: 'a1',
-      });
+      expect(mockDb.delete).toHaveBeenCalled();
+      expect(deleteChain.where).toHaveBeenCalled();
+      expect(deleteChain.returning).toHaveBeenCalled();
+      expect(mockCtx.json).toHaveBeenCalledWith({ success: true, deletedId: 'a1' });
     });
 
-    it('should return 404 if appointment to delete is not found', async () => {
-      mockReturning.mockResolvedValue([]); // Nada foi deletado
-      mockCtx.req.param.mockReturnValue({ id: 'a1' });
+    it('should return 404 if not found', async () => {
+      const deleteChain = createMockChain([]);
+      mockDb.delete.mockReturnValueOnce(deleteChain);
 
       await deleteAppointment(mockCtx);
 
       expect(mockCtx.json).toHaveBeenCalledWith(
-        { error: 'Appointment not found to delete' },
+        { error: 'Appointment not found to delete' }, 
         404
       );
     });

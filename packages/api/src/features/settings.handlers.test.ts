@@ -12,12 +12,29 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Context } from 'hono';
 import { eq } from 'drizzle-orm';
-// Importa o schema (Módulo 2) assumindo o path do monorepo
-import { settings } from '@repo/db/schema';
 // Importa os handlers que serão testados
 import { getSettings, updateSettings } from './settings.handlers';
 // Importa os tipos Hono (Tarefa 3.4)
 import { Variables, AuthUser } from '../../types';
+
+// Mock do schema usando vi.hoisted() para evitar problemas de hoisting
+const { mockSettingsTable } = vi.hoisted(() => {
+  return {
+    mockSettingsTable: {
+      userId: { name: 'user_id', table: { name: 'settings' } },
+      id: { name: 'id', table: { name: 'settings' } },
+    },
+  };
+});
+
+vi.mock('@repo/db/schema', () => {
+  return {
+    settings: mockSettingsTable,
+  };
+});
+
+// Agora importamos o settings mockado
+import { settings } from '@repo/db/schema';
 
 // Mock do usuário autenticado 
 const mockUser: AuthUser = {

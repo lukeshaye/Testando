@@ -3,14 +3,14 @@
  *
  * (Executor: Implementando estritamente o $$PLANO_DE_FEATURE$$)
  *
- * [cite_start]De Onde (Refatoração): [cite: 136] Lógica de src/shared/store.ts e src/worker/index.ts.
- * [cite_start]O Quê (Lógica): [cite: 107] Criar e exportar funções de handler para a feature 'services'.
+ * De Onde (Refatoração): Lógica de src/shared/store.ts e src/worker/index.ts.
+ * O Quê (Lógica): Criar e exportar funções de handler para a feature 'services'.
  * Como (Princípios):
- [cite_start]* [cite: 137] Todos os handlers devem usar sintaxe Drizzle (c.var.db).
- [cite_start]* [cite: 137] Todos os handlers devem aplicar a lógica de user_id (c.var.user) em todas as consultas.
- [cite_start]* [cite: 109] Os handlers usam o cliente Drizzle injetado (c.var.db).
- [cite_start]* [cite: 117, 120] createService usa c.req.valid('json') e injeta userId.
- [cite_start]* [cite: 111, 113] getServices filtra por userId.
+ * - Todos os handlers devem usar sintaxe Drizzle (c.var.db).
+ * - Todos os handlers devem aplicar a lógica de user_id (c.var.user) em todas as consultas.
+ * - Os handlers usam o cliente Drizzle injetado (c.var.db).
+ * - createService usa c.req.valid('json') e injeta userId.
+ * - getServices filtra por userId.
  */
 
 import { Context } from 'hono';
@@ -22,18 +22,18 @@ import { Variables } from '../../types';
 type HandlerContext = Context<{ Variables: Variables }>;
 
 /**
- [cite_start]* [cite: 110-115] Handler para buscar todos os serviços (filtrado por usuário).
+ * Handler para buscar todos os serviços (filtrado por usuário).
  */
 export const getServices = async (c: HandlerContext) => {
-  [cite_start]const user = c.var.user; [cite: 111]
+  const user = c.var.user;
 
   try {
-    [cite_start]const data = await c.var.db [cite: 112]
+    const data = await c.var.db
       .select()
       .from(services)
-      [cite_start].where(eq(services.userId, user.id)); [cite: 113]
+      .where(eq(services.userId, user.id));
 
-    [cite_start]return c.json(data); [cite: 114]
+    return c.json(data);
   } catch (error) {
     console.error('Error fetching services:', error);
     return c.json({ error: 'Failed to fetch services' }, 500);
@@ -54,7 +54,7 @@ export const getServiceById = async (c: HandlerContext) => {
       .where(
         and(
           eq(services.id, id),
-          [cite_start]eq(services.userId, user.id) // [cite: 137] RLS/Tenancy
+          eq(services.userId, user.id) // RLS/Tenancy
         )
       );
 
@@ -69,22 +69,22 @@ export const getServiceById = async (c: HandlerContext) => {
 };
 
 /**
- [cite_start]* [cite: 116-122] Handler para criar um novo serviço (associado ao usuário).
+ * Handler para criar um novo serviço (associado ao usuário).
  */
 export const createService = async (c: HandlerContext) => {
-  [cite_start]const newServiceData = c.req.valid('json'); [cite: 117]
-  [cite_start]const user = c.var.user; [cite: 118]
+  const newServiceData = c.req.valid('json');
+  const user = c.var.user;
 
   try {
     const data = await c.var.db
       .insert(services)
       .values({
         ...newServiceData,
-        [cite_start]userId: user.id, // [cite: 120] Garantindo tenancy
+        userId: user.id, // Garantindo tenancy
       })
-      [cite_start].returning(); [cite: 120]
+      .returning();
 
-    [cite_start]return c.json(data[0], 201); [cite: 121]
+    return c.json(data[0], 201);
   } catch (error) {
     console.error('Error creating service:', error);
     return c.json({ error: 'Failed to create service' }, 500);
@@ -110,7 +110,7 @@ export const updateService = async (c: HandlerContext) => {
       .where(
         and(
           eq(services.id, id),
-          [cite_start]eq(services.userId, user.id) // [cite: 137] RLS/Tenancy
+          eq(services.userId, user.id) // RLS/Tenancy
         )
       )
       .returning();
@@ -139,7 +139,7 @@ export const deleteService = async (c: HandlerContext) => {
       .where(
         and(
           eq(services.id, id),
-          [cite_start]eq(services.userId, user.id) // [cite: 137] RLS/Tenancy
+          eq(services.userId, user.id) // RLS/Tenancy
         )
       )
       .returning();

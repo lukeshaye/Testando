@@ -8,11 +8,11 @@
  *
  * Princípios Aplicados:
  * - DIP (2.9) / Pilar 2: Os handlers dependem da abstração c.var.db (Drizzle injetado),
- * [cite_start]não de um cliente Supabase específico. [cite: 109, 137]
+ * não de um cliente Supabase específico.
  * - DSpP (2.16) / Pilar 13: A lógica de RLS/Tenancy (isolamento por usuário) é
- * [cite_start]aplicada em todas as queries usando o c.var.user.id. [cite: 137]
+ * aplicada em todas as queries usando o c.var.user.id.
  * - SoC (2.5): Este arquivo foca exclusivamente na lógica de manipulação dos
- * [cite_start]dados (handlers), separado do roteamento e validação (routes.ts). [cite: 108]
+ * dados (handlers), separado do roteamento e validação (routes.ts).
  */
 
 import type { Context } from 'hono';
@@ -20,8 +20,8 @@ import { Variables } from '../../types';
 import { eq, desc, and } from 'drizzle-orm';
 // Importa o schema Drizzle (Módulo 2)
 import { financialTransactions } from '@db/schema';
-[cite_start]// A validação Zod (Módulo 1) é aplicada em .routes.ts [cite: 103]
-[cite_start]// Os handlers recebem o dado validado via c.req.valid('json') [cite: 117]
+// A validação Zod (Módulo 1) é aplicada em .routes.ts
+// Os handlers recebem o dado validado via c.req.valid('json')
 
 // Define o tipo do Contexto com as Variáveis injetadas para type safety
 type FinancialContext = Context<{ Variables: Variables }>;
@@ -31,17 +31,17 @@ type FinancialContext = Context<{ Variables: Variables }>;
  * (GET /financial)
  */
 export const getFinancialTransactions = async (c: FinancialContext) => {
-  [cite_start]const db = c.var.db; [cite: 109, 137]
-  [cite_start]const user = c.var.user; [cite: 111, 137]
+  const db = c.var.db;
+  const user = c.var.user;
 
   try {
     const data = await db
       .select()
       .from(financialTransactions)
-      [cite_start].where(eq(financialTransactions.userId, user.id)) // [cite: 113, 137]
+      .where(eq(financialTransactions.userId, user.id))
       .orderBy(desc(financialTransactions.date)); // Ordenação padrão
 
-    [cite_start]return c.json(data); [cite: 114]
+    return c.json(data);
   } catch (error) {
     // (PTE 2.15) Error handling básico
     return c.json({ error: 'Failed to fetch transactions' }, 500);
@@ -64,7 +64,7 @@ export const getFinancialTransactionById = async (c: FinancialContext) => {
       .where(
         and(
           eq(financialTransactions.id, id),
-          [cite_start]eq(financialTransactions.userId, user.id), // [cite: 137]
+          eq(financialTransactions.userId, user.id), // RLS/Tenancy
         ),
       );
 
@@ -84,19 +84,19 @@ export const getFinancialTransactionById = async (c: FinancialContext) => {
  */
 export const createFinancialTransaction = async (c: FinancialContext) => {
   const db = c.var.db;
-  [cite_start]const user = c.var.user; [cite: 118]
-  const newTransaction = c.req.valid('json'); [cite_start]// [cite: 117]
+  const user = c.var.user;
+  const newTransaction = c.req.valid('json');
 
   try {
     const data = await db
       .insert(financialTransactions)
       .values({
         ...newTransaction,
-        [cite_start]userId: user.id, // [cite: 120, 137]
+        userId: user.id, // RLS/Tenancy
       })
-      .returning(); [cite_start]// [cite: 120]
+      .returning();
 
-    [cite_start]return c.json(data[0], 201); [cite: 121]
+    return c.json(data[0], 201);
   } catch (error) {
     return c.json({ error: 'Failed to create transaction' }, 500);
   }
@@ -119,7 +119,7 @@ export const updateFinancialTransaction = async (c: FinancialContext) => {
       .where(
         and(
           eq(financialTransactions.id, id),
-          [cite_start]eq(financialTransactions.userId, user.id), // [cite: 137]
+          eq(financialTransactions.userId, user.id), // RLS/Tenancy
         ),
       )
       .returning();
@@ -149,7 +149,7 @@ export const deleteFinancialTransaction = async (c: FinancialContext) => {
       .where(
         and(
           eq(financialTransactions.id, id),
-          [cite_start]eq(financialTransactions.userId, user.id), // [cite: 137]
+          eq(financialTransactions.userId, user.id), // RLS/Tenancy
         ),
       )
       .returning();

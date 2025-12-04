@@ -5,16 +5,20 @@ import { z } from 'zod';
  * Não inclui 'id' pois é gerado pelo banco de dados.
  */
 export const CreateProductSchema = z.object({
-  [cite_start]name: z.string().min(1, { message: 'Nome é obrigatório' }), // [cite: 76]
-  [cite_start]price: z.number().positive({ message: 'Preço deve ser um valor positivo' }), // [cite: 77]
+  name: z.string().min(1, { message: 'Nome é obrigatório' }),
+  price: z.number().positive({ message: 'Preço deve ser um valor positivo' }),
   quantity: z
     .number()
     .int({ message: 'Quantidade deve ser um número inteiro' })
-    [cite_start].min(0, { message: 'Quantidade não pode ser negativa' }), // [cite: 78]
+    .min(0, { message: 'Quantidade não pode ser negativa' }),
   image_url: z
-    .string()
-    .url({ message: 'URL da imagem inválida' })
-    [cite_start].or(z.literal('')), // [cite: 79]
+    .union([
+      z.literal(''),
+      z.string().url({ message: 'URL da imagem inválida' }).refine(
+        (val) => /^https?:\/\//.test(val),
+        { message: 'URL da imagem inválida' }
+      ),
+    ]),
 });
 
 /**

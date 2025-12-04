@@ -5,18 +5,29 @@ export const ClientSchema = z.object({
   name: z.string().min(1, 'Nome do cliente é obrigatório'),
   email: z.string().email({ message: 'Email inválido' }).nullable(),
   phone: z.string().nullable(),
-  birth_date: z
-    .string()
-    .min(10, 'Data deve estar no formato YYYY-MM-DD')
-    .max(new Date().toISOString().split('T')[0], 'Data não pode ser no futuro') // Garante que a data não seja futura
+  // Implementação da validação robusta de data
+  birth_date: z.coerce.date()
+    .refine((date) => date <= new Date(), {
+      message: "Data de nascimento não pode ser no futuro"
+    })
     .nullable(),
   gender: z.enum(['masculino', 'feminino', 'outro']).nullable(),
-  created_at: z.date(),
+  how_found: z.string().nullable().optional(),
+  created_at: z
+    .string()
+    .datetime({ message: 'Data de criação inválida' })
+    .or(z.date()),
+  updated_at: z
+    .string()
+    .datetime({ message: 'Data de atualização inválida' })
+    .or(z.date())
+    .optional(),
 });
 
 export const CreateClientSchema = ClientSchema.omit({
   id: true,
   created_at: true,
+  updated_at: true,
 });
 
 export type Client = z.infer<typeof ClientSchema>;

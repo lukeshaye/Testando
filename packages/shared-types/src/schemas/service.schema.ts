@@ -5,17 +5,17 @@ import { z } from 'zod';
  * Não inclui 'id' pois é gerado pelo banco de dados.
  */
 export const CreateServiceSchema = z.object({
-  [cite_start]name: z.string().min(1, { message: 'Nome é obrigatório' }), [cite: 66]
-  [cite_start]price: z.number().positive({ message: 'Preço deve ser um valor positivo' }), [cite: 67]
+  name: z.string().min(1, { message: 'Nome é obrigatório' }),
+  price: z.number().positive({ message: 'Preço deve ser um valor positivo' }),
   duration: z
     .number()
     .int({ message: 'Duração deve ser um número inteiro em minutos' })
-    [cite_start].positive({ message: 'Duração deve ser um valor positivo' }), [cite: 68]
+    .positive({ message: 'Duração deve ser um valor positivo' }),
   color: z
     .string()
     .regex(/^#[0-9a-fA-F]{6}$/, {
       message: 'Cor deve estar no formato hexadecimal (ex: #FFFFFF)',
-    [cite_start]}), [cite: 69]
+    }),
   // commission_rate não foi especificado no plano para este schema
 });
 

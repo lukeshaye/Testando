@@ -19,46 +19,41 @@ import {
   updateProduct,
   deleteProduct,
 } from './products.handlers';
-import { products } from '../../db/schema'; // Usado para verificação de mock
+import { products } from '@db/schema'; // Usado para verificação de mock
 
 // Mock do usuário (c.var.user) 
 const mockUser = { id: 'user-123', email: 'test@test.com' };
 
 // Mock do cliente Drizzle (c.var.db) 
-const mockDb = {
+// Criamos um objeto encadeável que retorna a si mesmo para suportar chaining infinito
+const createMockChain = (finalValue?: any) => {
+  const chain: any = {
+    from: vi.fn(() => chain),
+    where: vi.fn(() => chain),
+    limit: vi.fn(() => Promise.resolve(finalValue || [])),
+    values: vi.fn(() => chain),
+    set: vi.fn(() => chain),
+    returning: vi.fn(() => Promise.resolve(finalValue || [])),
+  };
+  return chain;
+};
+
+// Mock do DB que retorna cadeias encadeáveis
+const mockDb: any = {
   select: vi.fn(),
   insert: vi.fn(),
   update: vi.fn(),
   delete: vi.fn(),
-  // Funções 'chainable'
-  from: vi.fn(),
-  where: vi.fn(),
-  values: vi.fn(),
-  returning: vi.fn(),
-  set: vi.fn(),
-  limit: vi.fn(),
 };
 
-// Resetar mocks 'chainable' para retornarem 'this' (ou um mock específico)
+// Resetar mocks antes de cada teste
 beforeEach(() => {
   vi.resetAllMocks();
-
-  // Configuração da cadeia de Drizzle
-  mockDb.select.mockReturnValue(mockDb);
-  mockDb.from.mockReturnValue(mockDb);
-  mockDb.where.mockResolvedValue([{ id: 'prod-1', name: 'Test Product', userId: mockUser.id }]); // Default select response
-  mockDb.limit.mockResolvedValue([{ id: 'prod-1', name: 'Test Product', userId: mockUser.id }]); // Default limit response
-
-  mockDb.insert.mockReturnValue(mockDb);
-  mockDb.values.mockReturnValue(mockDb);
-  mockDb.returning.mockResolvedValue([{ id: 'prod-new', name: 'New Product', userId: mockUser.id }]); // Default insert response
-
-  mockDb.update.mockReturnValue(mockDb);
-  mockDb.set.mockReturnValue(mockDb);
-  // mockDb.where (do update) usa o 'returning'
   
-  mockDb.delete.mockReturnValue(mockDb);
-  // mockDb.where (do delete) usa o 'returning'
+  // Configurar mocks padrão (cada teste pode sobrescrever se necessário)
+  mockDb.insert.mockReturnValue(createMockChain([{ id: 'prod-new', name: 'New Product', userId: mockUser.id }]));
+  mockDb.update.mockReturnValue(createMockChain([{ id: 'prod-1', name: 'Updated Product', userId: mockUser.id }]));
+  mockDb.delete.mockReturnValue(createMockChain([{ id: 'prod-1' }]));
 });
 
 // Helper para criar um mock de Contexto
@@ -83,11 +78,20 @@ describe('Products Handlers', () => {
     it('deve chamar db.select.from.where com o userId correto', async () => {
       // (Adaptado para getProducts)
       const c = createMockContext();
+      const whereMock = vi.fn(() => Promise.resolve([{ id: 'prod-1', name: 'Test Product', userId: mockUser.id }]));
+      const fromMock = vi.fn(() => ({
+        where: whereMock,
+      }));
+      const selectChain = {
+        from: fromMock,
+      };
+      mockDb.select.mockReturnValueOnce(selectChain);
+      
       await getProducts(c);
 
       expect(mockDb.select).toHaveBeenCalled();
-      expect(mockDb.from).toHaveBeenCalledWith(products);
-      expect(mockDb.where).toHaveBeenCalled(); // (eq(products.userId, user.id))
+      expect(fromMock).toHaveBeenCalledWith(products);
+      expect(whereMock).toHaveBeenCalled(); // (eq(products.userId, user.id))
       expect(c.json).toHaveBeenCalledWith(expect.any(Array));
     });
   });
@@ -95,30 +99,36 @@ describe('Products Handlers', () => {
   describe('getProductById', () => {
     it('deve chamar db.select.from.where com id e userId', async () => {
       const c = createMockContext(null, { id: 'prod-1' });
+      // Configurar mock específico para este teste
+      const selectChain = createMockChain([{ id: 'prod-1', name: 'Test Product', userId: mockUser.id }]);
+      mockDb.select.mockReturnValueOnce(selectChain);
+      
       await getProductById(c);
 
       expect(mockDb.select).toHaveBeenCalled();
-      expect(mockDb.from).toHaveBeenCalledWith(products);
-      expect(mockDb.where).toHaveBeenCalled(); // (eq(products.id, id) && eq(products.userId, user.id))
-      expect(mockDb.limit).toHaveBeenCalledWith(1);
+      expect(selectChain.from).toHaveBeenCalledWith(products);
+      expect(selectChain.where).toHaveBeenCalled();
+      expect(selectChain.limit).toHaveBeenCalledWith(1);
       expect(c.json).toHaveBeenCalledWith(expect.objectContaining({ id: 'prod-1' }));
     });
   });
 
   describe('createProduct', () => {
     it('deve chamar db.insert.values.returning com o userId correto', async () => {
-      // (Adaptado para createProduct)
       const newProduct = { name: 'New Product', price: 100 };
       const c = createMockContext(newProduct);
+      // Configurar mock específico para este teste
+      const insertChain = createMockChain([{ id: 'prod-new', name: 'New Product', userId: mockUser.id }]);
+      mockDb.insert.mockReturnValueOnce(insertChain);
       
       await createProduct(c);
 
       expect(mockDb.insert).toHaveBeenCalledWith(products);
-      expect(mockDb.values).toHaveBeenCalledWith({
+      expect(insertChain.values).toHaveBeenCalledWith({
         ...newProduct,
-        userId: mockUser.id, // 
+        userId: mockUser.id,
       });
-      expect(mockDb.returning).toHaveBeenCalled();
+      expect(insertChain.returning).toHaveBeenCalled();
       expect(c.json).toHaveBeenCalledWith(
         expect.objectContaining({ name: 'New Product' }),
         201
@@ -130,16 +140,16 @@ describe('Products Handlers', () => {
     it('deve chamar db.update.set.where.returning com o userId correto', async () => {
       const updatedValues = { name: 'Updated Product' };
       const c = createMockContext(updatedValues, { id: 'prod-1' });
-      
-      // Mock específico para update
-      mockDb.returning.mockResolvedValueOnce([{ ...updatedValues, id: 'prod-1' }]);
+      // Configurar mock específico para este teste
+      const updateChain = createMockChain([{ id: 'prod-1', name: 'Updated Product', userId: mockUser.id }]);
+      mockDb.update.mockReturnValueOnce(updateChain);
 
       await updateProduct(c);
 
       expect(mockDb.update).toHaveBeenCalledWith(products);
-      expect(mockDb.set).toHaveBeenCalledWith(updatedValues);
-      expect(mockDb.where).toHaveBeenCalled(); // (eq(products.id, id) && eq(products.userId, user.id))
-      expect(mockDb.returning).toHaveBeenCalled();
+      expect(updateChain.set).toHaveBeenCalledWith(updatedValues);
+      expect(updateChain.where).toHaveBeenCalled();
+      expect(updateChain.returning).toHaveBeenCalled();
       expect(c.json).toHaveBeenCalledWith(
         expect.objectContaining({ name: 'Updated Product' })
       );
@@ -149,15 +159,15 @@ describe('Products Handlers', () => {
   describe('deleteProduct', () => {
     it('deve chamar db.delete.where.returning com o userId correto', async () => {
       const c = createMockContext(null, { id: 'prod-1' });
-      
-      // Mock específico para delete
-      mockDb.returning.mockResolvedValueOnce([{ id: 'prod-1' }]);
+      // Configurar mock específico para este teste
+      const deleteChain = createMockChain([{ id: 'prod-1' }]);
+      mockDb.delete.mockReturnValueOnce(deleteChain);
 
       await deleteProduct(c);
 
       expect(mockDb.delete).toHaveBeenCalledWith(products);
-      expect(mockDb.where).toHaveBeenCalled(); // (eq(products.id, id) && eq(products.userId, user.id))
-      expect(mockDb.returning).toHaveBeenCalled();
+      expect(deleteChain.where).toHaveBeenCalled();
+      expect(deleteChain.returning).toHaveBeenCalled();
       expect(c.json).toHaveBeenCalledWith({ message: 'Product deleted successfully' });
     });
   });

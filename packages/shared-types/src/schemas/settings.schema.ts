@@ -1,40 +1,72 @@
 import { z } from 'zod';
 
-// Define o regex para o formato HH:MM (baseado no )
-export const TIME_REGEX = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/;
+// ---------------------------------------------------------------------------
+// Aplicação do Princípio 2.2 (DRY - Don't Repeat Yourself)
+// ---------------------------------------------------------------------------
+// A regex é definida uma única vez como uma constante autoritativa. 
+// Isso evita a duplicação da lógica de validação de horário em múltiplos pontos do schema.
+// Formato aceito: HH:MM (ex: 08:00, 23:59).
+// Regex estrito: exige 2 dígitos para hora (rejeita "9:00", exige "09:00")
+// Princípio 2.16 (DSpP): Zero Trust - rejeita formatos ambíguos
+const TIME_REGEX = /^([01][0-9]|2[0-3]):[0-5][0-9]$/;
+const TIME_ERROR_MESSAGE = 'Formato HH:MM inválido';
 
-// Schema para Horários de Funcionamento (BusinessHoursSchema)
+// ---------------------------------------------------------------------------
+// Schema: BusinessHours (Horários de Funcionamento)
+// ---------------------------------------------------------------------------
 export const BusinessHoursSchema = z.object({
-  id: z.number().int().positive().optional(), // Assumindo que pode ter um ID do banco
+  id: z.number().int().positive().optional(),
+  
   day_of_week: z
-    .number()
-    .int()
-    .min(0, 'Dia da semana deve ser entre 0 (Domingo) e 6 (Sábado)') // 
-    .max(6, 'Dia da semana deve ser entre 0 (Domingo) e 6 (Sábado)'), // 
+    .number({ invalid_type_error: "O dia da semana deve ser um número." })
+    .int("O dia da semana deve ser um número inteiro.")
+    .min(0, "O dia deve ser no mínimo 0 (Domingo).")
+    .max(6, "O dia deve ser no máximo 6 (Sábado)."),
+    
+  // Aplicação do Princípio 2.16 (DSpP - Design Seguro por Padrão)
+  // Validação estrita na entrada ("zero trust"). Garante que o dado só entra
+  // se estiver perfeitamente formatado, prevenindo erros de runtime.
   start_time: z
     .string()
-    .regex(TIME_REGEX, 'Formato HH:MM inválido')
-    .nullable(), // 
-  end_time: z.string().regex(TIME_REGEX, 'Formato HH:MM inválido').nullable(), // 
+    .regex(TIME_REGEX, TIME_ERROR_MESSAGE)
+    .nullable(),
+    
+  end_time: z
+    .string()
+    .regex(TIME_REGEX, TIME_ERROR_MESSAGE)
+    .nullable(),
 });
 
-// Schema para Exceções de Horário (BusinessExceptionSchema)
+// ---------------------------------------------------------------------------
+// Schema: BusinessException (Exceções de Horário/Feriados)
+// ---------------------------------------------------------------------------
 export const BusinessExceptionSchema = z.object({
-  id: z.number().int().positive().optional(), // Assumindo que pode ter um ID do banco
-  exception_date: z.coerce.date({
-    // (Usando coerce para DSpP, convertendo string para Date)
-    errorMap: () => ({ message: 'Data da exceção inválida.' }),
-  }),
+  id: z.number().int().positive().optional(),
+  
+  // Mantido z.string().date() para validação estrita do formato ISO (YYYY-MM-DD).
+  // Evita o uso de coerce.date() que poderia aceitar strings ambíguas.
+  exception_date: z
+    .string({ required_error: "A data da exceção é obrigatória." })
+    .date("Data inválida"), 
+    
   description: z
     .string()
-    .min(1, { message: 'A descrição da exceção é obrigatória.' }), // 
+    .min(1, { message: 'Descrição é obrigatória' }),
+    
+  // Reutilização da constante TIME_REGEX (Princípio 2.2)
   start_time: z
     .string()
-    .regex(TIME_REGEX, 'Formato HH:MM inválido')
-    .nullable(), // 
-  end_time: z.string().regex(TIME_REGEX, 'Formato HH:MM inválido').nullable(), // 
+    .regex(TIME_REGEX, TIME_ERROR_MESSAGE)
+    .nullable()
+    .optional(),
+    
+  end_time: z
+    .string()
+    .regex(TIME_REGEX, TIME_ERROR_MESSAGE)
+    .nullable()
+    .optional(),
 });
 
-// Exporta os tipos inferidos
+// Exportação dos tipos inferidos para uso no frontend/backend
 export type BusinessHours = z.infer<typeof BusinessHoursSchema>;
 export type BusinessException = z.infer<typeof BusinessExceptionSchema>;

@@ -12,18 +12,36 @@ import {
   deleteProfessional
 } from './professionals.handlers';
 
-// Mock dependencies
-vi.mock('@db/schema', () => ({
-  professionals: 'professionals_table_mock'
-}));
+// Mock dependencies - criar objeto mock que simula a estrutura Drizzle
+vi.mock('@db/schema', () => {
+  const mockProfessionalsTable = {
+    id: { name: 'id', table: { name: 'professionals' } },
+    userId: { name: 'user_id', table: { name: 'professionals' } },
+    name: { name: 'name', table: { name: 'professionals' } },
+  };
+  return {
+    professionals: mockProfessionalsTable
+  };
+});
 
 // Mock drizzle-orm operators to verify calls
 vi.mock('drizzle-orm', async (importOriginal) => {
   const actual = await importOriginal<typeof import('drizzle-orm')>();
   return {
     ...actual,
-    eq: vi.fn((col, val) => `eq(${col}, ${val})`),
-    and: vi.fn((...args) => `and(${args.join(', ')})`),
+    eq: vi.fn((col, val) => {
+      const colName = typeof col === 'object' && col !== null && 'name' in col ? col.name : String(col);
+      return `eq(${colName}, ${val})`;
+    }),
+    and: vi.fn((...args) => {
+      const argStrings = args.map(arg => {
+        if (typeof arg === 'string' && arg.startsWith('eq(')) {
+          return arg;
+        }
+        return String(arg);
+      });
+      return `and(${argStrings.join(', ')})`;
+    }),
   };
 });
 
@@ -114,7 +132,7 @@ describe('professionals.handlers', () => {
 
     expect(mockDb.select).toHaveBeenCalled(); // 
     expect(mockFrom).toHaveBeenCalledWith(professionals);
-    expect(mockWhere).toHaveBeenCalledWith(`eq(professionals_table_mock.userId, ${mockUser.id})`);
+    expect(mockWhere).toHaveBeenCalledWith(`eq(user_id, ${mockUser.id})`);
     expect(mockJson).toHaveBeenCalledWith(mockProfessionalsList);
   });
 
@@ -125,7 +143,7 @@ describe('professionals.handlers', () => {
     await getProfessionalById(mockContext);
 
     expect(mockReq.param).toHaveBeenCalledWith('id');
-    expect(mockWhere).toHaveBeenCalledWith(`and(eq(professionals_table_mock.id, prof-1), eq(professionals_table_mock.userId, ${mockUser.id}))`);
+    expect(mockWhere).toHaveBeenCalledWith(`and(eq(id, prof-1), eq(user_id, ${mockUser.id}))`);
     expect(mockJson).toHaveBeenCalledWith(mockProfessional);
   });
 
@@ -170,7 +188,7 @@ describe('professionals.handlers', () => {
       ...updates,
       updatedAt: new Date(), // Uses fake timer
     });
-    expect(mockWhere).toHaveBeenCalledWith(`and(eq(professionals_table_mock.id, prof-1), eq(professionals_table_mock.userId, ${mockUser.id}))`);
+    expect(mockWhere).toHaveBeenCalledWith(`and(eq(id, prof-1), eq(user_id, ${mockUser.id}))`);
     expect(mockReturning).toHaveBeenCalled();
     expect(mockJson).toHaveBeenCalledWith(mockProfessional);
   });
@@ -186,7 +204,7 @@ describe('professionals.handlers', () => {
 
     expect(mockReq.param).toHaveBeenCalledWith('id');
     expect(mockDb.delete).toHaveBeenCalledWith(professionals);
-    expect(mockDeleteWhere).toHaveBeenCalledWith(`and(eq(professionals_table_mock.id, prof-1), eq(professionals_table_mock.userId, ${mockUser.id}))`);
+    expect(mockDeleteWhere).toHaveBeenCalledWith(`and(eq(id, prof-1), eq(user_id, ${mockUser.id}))`);
     expect(mockReturning).toHaveBeenCalled();
     expect(mockJson).toHaveBeenCalledWith({ message: 'Professional deleted successfully' }, 200);
   });

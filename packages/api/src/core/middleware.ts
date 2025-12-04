@@ -57,24 +57,37 @@ export const corsMiddleware = cors();
 
 /**
  * Exporta um manipulador de erros (ErrorHandler) global.
- * O plano solicita que ele seja aplicado globalmente
- * para capturar quaisquer erros não tratados na cadeia de middleware.
+ *
+ * Importante: esta função segue a _assinatura de onError do Hono_,
+ * para ser registrada via `app.onError(errorHandler)`.
  */
-export const errorHandler = async (c: AppContext, next: Next) => {
-  try {
-    await next();
-  } catch (err: any) {
-    console.error(
-      `[GlobalErrorHandler]: ${err?.message}`,
-      err?.stack,
-      err?.cause,
-    );
-    return c.json(
-      {
-        error: 'Internal Server Error',
-        message: err?.message || 'An unexpected error occurred',
-      },
-      500,
-    );
+export const errorHandler = (err: any, c: Context) => {
+  // Normaliza a mensagem de erro para lidar com casos em que algo que não é
+  // uma instância de Error é lançado (ex: string crua).
+  // O Hono, nesse caso, costuma embrulhar em um Error com mensagem
+  // "Unknown Error: <valor_original>".
+  let message: string;
+
+  if (err instanceof Error) {
+    const rawMessage = err.message || '';
+    if (rawMessage.startsWith('Unknown Error:')) {
+      // Erro de origem desconhecida (por exemplo, foi lançada uma string crua)
+      message = 'Internal Server Error';
+    } else {
+      message = rawMessage || 'Internal Server Error';
+    }
+  } else {
+    // Valor não-Error lançado diretamente
+    message = 'Internal Server Error';
   }
+
+  console.error(`[GlobalErrorHandler]: ${message}`, err?.stack, err?.cause);
+
+  return c.json(
+    {
+      success: false,
+      error: message,
+    },
+    500,
+  );
 };

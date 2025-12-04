@@ -7,7 +7,7 @@
  *
  * Princípios Aplicados:
  * - PTE (2.15): Testes unitários focados na lógica do handler.
- * - [cite_start]DIP (2.9) /[cite: 126]: Mockamos as dependências injetadas (c.var.db e c.var.user),
+ * - DIP (2.9) /[cite: 126]: Mockamos as dependências injetadas (c.var.db e c.var.user),
  * não implementações concretas.
  */
 
@@ -28,7 +28,7 @@ vi.mock('@db/schema', () => ({
   },
 }));
 
-[cite_start]// Mock do Drizzle (c.var.db) [cite: 126]
+// Mock do Drizzle (c.var.db) [cite: 126]
 const mockDb = {
   select: vi.fn().mockReturnThis(),
   from: vi.fn().mockReturnThis(),
@@ -42,7 +42,7 @@ const mockDb = {
   delete: vi.fn().mockReturnThis(),
 };
 
-[cite_start]// Mock do usuário (c.var.user) [cite: 126]
+// Mock do usuário (c.var.user) [cite: 126]
 const mockUser = {
   id: 'user-123',
   email: 'test@example.com',
@@ -81,7 +81,7 @@ beforeEach(() => {
 });
 
 describe('Financial Handlers', () => {
-  [cite_start]describe('getFinancialTransactions [cite: 127]', () => {
+describe('getFinancialTransactions [cite: 127]', () => {
     it('should fetch all transactions for the user', async () => {
       const mockData = [{ id: 'tx-1' }, { id: 'tx-2' }];
       mockDb.orderBy.mockResolvedValue(mockData);
@@ -124,7 +124,7 @@ describe('Financial Handlers', () => {
     });
   });
 
-  [cite_start]describe('createFinancialTransaction [cite: 128]', () => {
+describe('createFinancialTransaction [cite: 128]', () => {
     it('should create a new transaction', async () => {
       const newTransaction = { description: 'New', amount: 100 };
       const createdTransaction = {

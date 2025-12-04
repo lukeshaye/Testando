@@ -72,9 +72,9 @@ describe('Core Middleware', () => {
   });
 
   describe('errorHandler (Global)', () => {
-    it('deve capturar erros lançados nas rotas e retornar 500', async () => {
-      // 1. Aplicar o middleware de erro antes das rotas
-      app.use('*', errorHandler);
+    it('deve capturar erros lançados nas rotas e retornar 500 em JSON estruturado', async () => {
+      // 1. Registrar o handler global de erro do Hono
+      app.onError(errorHandler);
 
       // 2. Rota que lança erro propositalmente
       app.get('/error', (c) => {
@@ -85,34 +85,48 @@ describe('Core Middleware', () => {
       const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
       const res = await app.request('/error');
+      
+      expect(res.status).toBe(500);
+      
+      // O errorHandler retorna JSON (c.json sempre retorna JSON no Hono)
+      // Verificar content-type para garantir que é JSON
+      const contentType = res.headers.get('content-type');
+      expect(contentType).toContain('application/json');
+      
       const body = await res.json();
 
-      expect(res.status).toBe(500);
       expect(body).toEqual({
-        error: 'Internal Server Error',
-        message: 'Test Error Message',
+        success: false,
+        error: 'Test Error Message',
       });
 
       // Restaurar console
       consoleSpy.mockRestore();
     });
 
-    it('deve retornar mensagem genérica se o erro não tiver mensagem', async () => {
-      app.use('*', errorHandler);
+    it('deve retornar mensagem padrão se o erro não tiver message', async () => {
+      app.onError(errorHandler);
       app.get('/unknown-error', (c) => {
-        throw 'String Error'; // Lançando algo que não é Error
+        // Lança um Error sem mensagem explícita para simular erro genérico
+        throw new Error();
       });
 
       const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
       const res = await app.request('/unknown-error');
-      const body = await res.json();
-
+      
       expect(res.status).toBe(500);
-      // Como lançamos uma string pura, o middleware tenta acessar .message e falha (undefined), caindo no fallback
-      // Nota: Dependendo da implementação do runtime JS, err?.message em string pode ser undefined.
-      // O middleware usa `err?.message || 'An unexpected error occurred'`
-      expect(body.message).toBeDefined();
+      
+      // Verificar content-type para garantir que é JSON
+      const contentType = res.headers.get('content-type');
+      expect(contentType).toContain('application/json');
+      
+      const body = await res.json();
+      
+      expect(body).toEqual({
+        success: false,
+        error: 'Internal Server Error',
+      });
 
       consoleSpy.mockRestore();
     });

@@ -15,7 +15,7 @@ import type { Bindings, Variables } from '@api/types';
 // Importa o schema da DB (Módulo 2)
 // (O Executor assume que o Módulo 2 exportou os schemas para
 // um local importável, ex: @api/db-schema)
-import { clients } from '@api/db-schema';
+import { clients } from '@db/schema';
 
 // Importa os tipos Zod (Módulo 1)
 // (O Executor assume que o Módulo 1 exportou os tipos Zod para

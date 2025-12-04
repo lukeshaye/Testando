@@ -22,11 +22,9 @@ describe('Auth Middleware', () => {
       await next();
     });
 
-    // Rota protegida usando o middleware a ser testado
-    app.use('/protected', authMiddleware);
-
-    // Endpoint de sucesso para verificação
-    app.get('/protected', (c) => {
+    // Registrar a rota primeiro, depois aplicar o middleware
+    // O middleware será executado antes do handler da rota
+    app.get('/protected', authMiddleware, (c) => {
       const user = c.var.user;
       return c.json({ message: 'Success', user });
     });
