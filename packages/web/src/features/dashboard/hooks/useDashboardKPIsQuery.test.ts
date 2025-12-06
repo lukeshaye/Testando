@@ -1,20 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, waitFor } from '@testing-library/react';
 import { useDashboardKPIsQuery } from './useDashboardKPIsQuery';
-import { api } from '@/packages/web/src/lib/api';
+import { useAuthenticatedApi } from '@/hooks/useAuthenticatedApi';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ReactNode } from 'react';
 
-// Mock do cliente API com estrutura completa conforme Módulo 5.1
-vi.mock('@/packages/web/src/lib/api', () => ({
-  api: {
-    dashboard: {
-      stats: { $get: vi.fn() },
-      chart: { $get: vi.fn() },
-    },
-    appointments: { $get: vi.fn() },
-  },
-}));
+// Mock do hook de autenticação
+vi.mock('@/hooks/useAuthenticatedApi');
 
 // Wrapper para o React Query
 const createWrapper = () => {
@@ -31,8 +23,18 @@ const createWrapper = () => {
 };
 
 describe('useDashboardKPIsQuery', () => {
+  const mockApi = {
+    dashboard: {
+      stats: { $get: vi.fn() },
+      chart: { $get: vi.fn() },
+    },
+    appointments: { $get: vi.fn() },
+  };
+
   beforeEach(() => {
     vi.clearAllMocks();
+    // Configurar o mock do hook de autenticação
+    (useAuthenticatedApi as any).mockReturnValue(mockApi);
   });
 
   it('deve retornar os dados de KPI com sucesso', async () => {
@@ -43,7 +45,7 @@ describe('useDashboardKPIsQuery', () => {
     };
 
     // Mock da resposta de sucesso
-    (api.dashboard.stats.$get as any).mockResolvedValue({
+    mockApi.dashboard.stats.$get.mockResolvedValue({
       ok: true,
       json: async () => mockData,
     });
@@ -60,12 +62,12 @@ describe('useDashboardKPIsQuery', () => {
 
     // Verifica os dados
     expect(result.current.data).toEqual(mockData);
-    expect(api.dashboard.stats.$get).toHaveBeenCalledTimes(1);
+    expect(mockApi.dashboard.stats.$get).toHaveBeenCalledTimes(1);
   });
 
   it('deve lançar um erro quando a requisição falhar', async () => {
     // Mock da resposta de erro
-    (api.dashboard.stats.$get as any).mockResolvedValue({
+    mockApi.dashboard.stats.$get.mockResolvedValue({
       ok: false,
     });
 

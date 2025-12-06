@@ -4,24 +4,12 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import React from 'react';
 import { z } from 'zod';
 
-// import { supabase } from '@/packages/lib/supabase'; // <-- REMOVIDO (Não é mais a dependência)
-import { api } from '@/packages/web/src/lib/api'; // <-- ADICIONADO (Nova dependência - Abstração)
+import { useAuthenticatedApi } from '@/hooks/useAuthenticatedApi';
 import { CreateProductSchema } from '@/packages/shared-types';
 import { useAddProductMutation } from './useAddProductMutation';
 
-// 1. Mockar a chamada à API (Hono RPC) (Princípio PTE 2.15 e DIP 2.9)
-// O hook agora chama 'api.products.$post'
-vi.mock('@/packages/web/src/lib/api', () => ({
-  api: {
-    products: {
-      $post: vi.fn(), // A função de 'escrita' (Command) que será mockada
-    },
-  },
-}));
-
-// Typecasting para facilitar o uso do mock
-const mockedApi = api as vi.Mocked<typeof api>;
-const mockPost = mockedApi.products.$post; // Acesso direto à função mockada
+// 1. Mockar o hook de autenticação (Princípio PTE 2.15 e DIP 2.9)
+vi.mock('@/hooks/useAuthenticatedApi');
 
 // O tipo de dados que a mutationFn receberá
 type ProductData = z.infer<typeof CreateProductSchema>;
@@ -52,8 +40,16 @@ const createWrapper = () => {
 };
 
 // 3. Limpar mocks antes de cada teste
+const mockApi = {
+  products: {
+    $post: vi.fn(),
+  },
+};
+
 beforeEach(() => {
-  vi.resetAllMocks(); // Limpa 'mockPost' e outros
+  vi.resetAllMocks(); // Limpa mocks
+  // Configurar o mock do hook de autenticação
+  (useAuthenticatedApi as any).mockReturnValue(mockApi);
 
   if (queryClient) {
     queryClient.clear();
@@ -87,7 +83,7 @@ describe('useAddProductMutation (Teste de Hook - PTE 2.15)', () => {
     // Arrange
     // Configura o mock da API para um retorno de sucesso
     // A API Hono RPC retorna um objeto 'Response' (ou similar) com .ok e .json()
-    mockPost.mockResolvedValue({
+    mockApi.products.$post.mockResolvedValue({
       ok: true,
       json: async () => newlyCreatedProduct,
     } as any); // 'as any' para simplificar o mock da 'Response'
@@ -109,8 +105,8 @@ describe('useAddProductMutation (Teste de Hook - PTE 2.15)', () => {
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
     // 1. Verifica se a API (abstração) foi chamada corretamente
-    expect(mockPost).toHaveBeenCalledTimes(1);
-    expect(mockPost).toHaveBeenCalledWith({ json: newProductData });
+    expect(mockApi.products.$post).toHaveBeenCalledTimes(1);
+    expect(mockApi.products.$post).toHaveBeenCalledWith({ json: newProductData });
 
     // 2. Verifica se a mutação retornou os dados corretos
     expect(result.current.data).toEqual(newlyCreatedProduct);
@@ -127,7 +123,7 @@ describe('useAddProductMutation (Teste de Hook - PTE 2.15)', () => {
     const mockError = { error: 'Falha na inserção via API' };
 
     // Configura o mock da API para um retorno de erro (!res.ok)
-    mockPost.mockResolvedValue({
+    mockApi.products.$post.mockResolvedValue({
       ok: false,
       json: async () => mockError,
     } as any);

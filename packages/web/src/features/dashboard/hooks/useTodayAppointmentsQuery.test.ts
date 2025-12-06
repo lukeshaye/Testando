@@ -1,20 +1,12 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook, waitFor } from '@testing-library/react';
 import { useTodayAppointmentsQuery } from './useTodayAppointmentsQuery';
-import { api } from '@/packages/web/src/lib/api';
+import { useAuthenticatedApi } from '@/hooks/useAuthenticatedApi';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ReactNode } from 'react';
 
-// Mock do cliente API com estrutura completa
-vi.mock('@/packages/web/src/lib/api', () => ({
-  api: {
-    dashboard: {
-      stats: { $get: vi.fn() },
-      chart: { $get: vi.fn() },
-    },
-    appointments: { $get: vi.fn() },
-  },
-}));
+// Mock do hook de autenticação
+vi.mock('@/hooks/useAuthenticatedApi');
 
 // Wrapper para o React Query
 const createWrapper = () => {
@@ -31,10 +23,19 @@ const createWrapper = () => {
 };
 
 describe('useTodayAppointmentsQuery', () => {
+  const mockApi = {
+    dashboard: {
+      stats: { $get: vi.fn() },
+      chart: { $get: vi.fn() },
+    },
+    appointments: { $get: vi.fn() },
+  };
   const mockDate = new Date('2023-10-25T10:00:00.000Z');
 
   beforeEach(() => {
     vi.clearAllMocks();
+    // Configurar o mock do hook de autenticação
+    (useAuthenticatedApi as any).mockReturnValue(mockApi);
     // Congela o tempo para garantir que o new Date().toISOString() seja previsível
     vi.useFakeTimers();
     vi.setSystemTime(mockDate);
@@ -51,7 +52,7 @@ describe('useTodayAppointmentsQuery', () => {
     ];
 
     // Mock da resposta de sucesso
-    (api.appointments.$get as any).mockResolvedValue({
+    mockApi.appointments.$get.mockResolvedValue({
       ok: true,
       json: async () => mockAppointments,
     });
@@ -70,7 +71,7 @@ describe('useTodayAppointmentsQuery', () => {
     expect(result.current.data).toEqual(mockAppointments);
 
     // Verifica se a API foi chamada com a data correta (ISO string do mockDate)
-    expect(api.appointments.$get).toHaveBeenCalledWith({
+    expect(mockApi.appointments.$get).toHaveBeenCalledWith({
       query: {
         date: mockDate.toISOString(),
       },
@@ -79,7 +80,7 @@ describe('useTodayAppointmentsQuery', () => {
 
   it('deve lançar erro ao falhar na busca', async () => {
     // Mock da resposta de erro
-    (api.appointments.$get as any).mockResolvedValue({
+    mockApi.appointments.$get.mockResolvedValue({
       ok: false,
     });
 

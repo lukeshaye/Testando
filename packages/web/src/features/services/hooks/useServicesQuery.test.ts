@@ -2,21 +2,23 @@ import { renderHook, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import { useServicesQuery } from './useServicesQuery';
-import { api } from '@/packages/web/src/lib/api';
+import { useAuthenticatedApi } from '@/hooks/useAuthenticatedApi';
 
-// Mock da api Hono RPC conforme Passo 2 das Instruções
-vi.mock('@/packages/web/src/lib/api', () => ({
-  api: {
+// Mock do hook de autenticação conforme Princípio PTE (2.15)
+vi.mock('@/hooks/useAuthenticatedApi');
+
+describe('useServicesQuery', () => {
+  const mockApi = {
     services: {
       $get: vi.fn(),
     },
-  },
-}));
+  };
 
-describe('useServicesQuery', () => {
   // Limpa os mocks antes de cada teste
   beforeEach(() => {
     vi.clearAllMocks();
+    // Configurar o mock do hook de autenticação
+    (useAuthenticatedApi as any).mockReturnValue(mockApi);
   });
 
   // Wrapper com QueryClientProvider necessário para hooks do React Query
@@ -40,7 +42,7 @@ describe('useServicesQuery', () => {
     ];
 
     // Simula resposta de sucesso do Hono RPC (interface fetch-like)
-    (api.services.$get as any).mockResolvedValue({
+    mockApi.services.$get.mockResolvedValue({
       ok: true,
       json: async () => mockData,
     });
@@ -55,12 +57,12 @@ describe('useServicesQuery', () => {
     // Verificações
     expect(result.current.data).toEqual(mockData);
     // O cliente RPC já encapsula a rota, verificamos apenas a chamada do método correto
-    expect(api.services.$get).toHaveBeenCalled();
+    expect(mockApi.services.$get).toHaveBeenCalled();
   });
 
   it('deve lidar com erros quando a resposta da API não for ok (!res.ok)', async () => {
     // Simula erro da API (ex: 400 ou 500) onde !res.ok é verdadeiro
-    (api.services.$get as any).mockResolvedValue({
+    mockApi.services.$get.mockResolvedValue({
       ok: false,
       statusText: 'Erro ao buscar serviços',
       json: async () => ({ message: 'Erro interno' }),
@@ -75,6 +77,6 @@ describe('useServicesQuery', () => {
 
     // Verificações
     expect(result.current.error).toBeDefined();
-    expect(api.services.$get).toHaveBeenCalled();
+    expect(mockApi.services.$get).toHaveBeenCalled();
   });
 });

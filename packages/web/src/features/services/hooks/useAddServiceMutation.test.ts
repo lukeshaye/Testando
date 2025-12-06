@@ -2,17 +2,11 @@ import { renderHook, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import { useAddServiceMutation } from './useAddServiceMutation';
-import { api } from '@/packages/web/src/lib/api';
+import { useAuthenticatedApi } from '@/hooks/useAuthenticatedApi';
 import { CreateServiceType } from '@/packages/shared-types';
 
-// Mock da api Hono RPC
-vi.mock('@/packages/web/src/lib/api', () => ({
-  api: {
-    services: {
-      $post: vi.fn(),
-    },
-  },
-}));
+// Mock do hook de autenticação
+vi.mock('@/hooks/useAuthenticatedApi');
 
 // Mock do useToast
 const mockToast = vi.fn();
@@ -24,9 +18,16 @@ vi.mock('@/components/ui/use-toast', () => ({
 
 describe('useAddServiceMutation', () => {
   let queryClient: QueryClient;
+  const mockApi = {
+    services: {
+      $post: vi.fn(),
+    },
+  };
 
   beforeEach(() => {
     vi.clearAllMocks();
+    // Configurar o mock do hook de autenticação
+    (useAuthenticatedApi as any).mockReturnValue(mockApi);
     // Instancia um novo QueryClient para cada teste
     queryClient = new QueryClient({
       defaultOptions: {
@@ -53,7 +54,7 @@ describe('useAddServiceMutation', () => {
     const invalidateQueriesSpy = vi.spyOn(queryClient, 'invalidateQueries');
     
     // Mock da resposta de sucesso da API (Padrão Hono RPC)
-    (api.services.$post as any).mockResolvedValueOnce({
+    mockApi.services.$post.mockResolvedValueOnce({
       ok: true,
       json: async () => ({ id: 1, ...newServiceData }),
     });
@@ -67,7 +68,7 @@ describe('useAddServiceMutation', () => {
 
     // Verificações
     await waitFor(() => {
-      expect(api.services.$post).toHaveBeenCalledWith({ json: newServiceData });
+      expect(mockApi.services.$post).toHaveBeenCalledWith({ json: newServiceData });
     });
 
     await waitFor(() => {
@@ -90,7 +91,7 @@ describe('useAddServiceMutation', () => {
     const errorMessage = 'Erro interno no servidor';
 
     // Mock de erro da API (Simulando resposta !ok que o hook deve tratar)
-    (api.services.$post as any).mockResolvedValueOnce({
+    mockApi.services.$post.mockResolvedValueOnce({
       ok: false,
       statusText: errorMessage,
       json: async () => ({ message: errorMessage }),

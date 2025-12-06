@@ -1,24 +1,22 @@
 import { renderHook, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { vi, describe, it, expect, beforeEach } from 'vitest'
-import { api } from '@/packages/web/src/lib/api' // Import a ser mockado
+import { useAuthenticatedApi } from '@/hooks/useAuthenticatedApi'
 import { useDeleteProfessionalMutation } from './useDeleteProfessionalMutation'
 
 /**
- * Mock do cliente API (Hono/RPC) para simular a chamada DELETE de remoção.
+ * Mock do hook de autenticação.
  */
-vi.mock('@/packages/web/src/lib/api', () => ({
-  api: {
+vi.mock('@/hooks/useAuthenticatedApi')
+
+describe('useDeleteProfessionalMutation', () => {
+  const mockApi = {
     professionals: {
       ':id': {
         $delete: vi.fn(),
       },
     },
-  },
-}))
-
-describe('useDeleteProfessionalMutation', () => {
-  const mockedApi = vi.mocked(api)
+  }
   const PROFESSIONAL_ID = 99
 
   // Setup do QueryClient e Spy
@@ -39,6 +37,8 @@ describe('useDeleteProfessionalMutation', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+    // Configurar o mock do hook de autenticação
+    (useAuthenticatedApi as any).mockReturnValue(mockApi)
     queryClient.clear()
     invalidateSpy.mockClear()
   })
@@ -47,7 +47,7 @@ describe('useDeleteProfessionalMutation', () => {
   it('should call the API with the correct ID and invalidate professionals cache on success', async () => {
     // Arrange
     // Simula a resposta de sucesso para um DELETE (status 200/204, sem corpo)
-    mockedApi.professionals[':id'].$delete.mockResolvedValue({
+    mockApi.professionals[':id'].$delete.mockResolvedValue({
       ok: true,
       json: async () => ({}), // O hook real retorna { success: true }
       status: 204, 
@@ -69,7 +69,7 @@ describe('useDeleteProfessionalMutation', () => {
     expect(result.current.data).toEqual({ success: true })
 
     // Assert 2: Verifica se a função da API foi chamada corretamente (CQRS 2.12)
-    expect(mockedApi.professionals[':id'].$delete).toHaveBeenCalledWith({
+    expect(mockApi.professionals[':id'].$delete).toHaveBeenCalledWith({
       param: { id: PROFESSIONAL_ID.toString() },
     })
 
@@ -82,7 +82,7 @@ describe('useDeleteProfessionalMutation', () => {
   it('should handle API failure and return an error without invalidating cache', async () => {
     // Arrange
     const errorBody = { message: 'Deletion forbidden' }
-    mockedApi.professionals[':id'].$delete.mockResolvedValue({
+    mockApi.professionals[':id'].$delete.mockResolvedValue({
       ok: false,
       status: 403,
       statusText: 'Forbidden',
@@ -111,7 +111,7 @@ describe('useDeleteProfessionalMutation', () => {
   it('should handle network errors (rejected promise)', async () => {
     // Arrange
     const networkError = new Error('Network timeout')
-    mockedApi.professionals[':id'].$delete.mockRejectedValue(networkError)
+    mockApi.professionals[':id'].$delete.mockRejectedValue(networkError)
 
     // Act
     const { result } = renderHook(() => useDeleteProfessionalMutation(), {

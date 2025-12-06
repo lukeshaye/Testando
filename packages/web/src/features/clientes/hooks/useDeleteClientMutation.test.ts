@@ -4,12 +4,12 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import React from 'react';
-import { api } from '@/packages/web/src/lib/api';
+import { useAuthenticatedApi } from '@/hooks/useAuthenticatedApi';
 import { toast } from 'sonner';
 import { useDeleteClientMutation } from './useDeleteClientMutation';
 
 // Mockar dependências externas (DIP 2.9)
-vi.mock('@/packages/web/src/lib/api');
+vi.mock('@/hooks/useAuthenticatedApi');
 vi.mock('sonner');
 
 // Dados de teste
@@ -29,14 +29,20 @@ const createWrapper = ()_wrapper => {
 };
 
 describe('useDeleteClientMutation', () => {
+  const mockApi = {
+    delete: vi.fn(),
+  };
+
   beforeEach(() => {
     vi.resetAllMocks();
+    // Configurar o mock do hook de autenticação
+    (useAuthenticatedApi as any).mockReturnValue(mockApi);
   });
 
   it('should call api.delete with correct id, invalidate queries, and show success toast on success', async () => {
     // Arrange
     const { wrapper, queryClient } = createWrapper();
-    vi.mocked(api.delete).mockResolvedValue({ data: { success: true } });
+    vi.mocked(mockApi.delete).mockResolvedValue({ data: { success: true } });
     const { result } = renderHook(() => useDeleteClientMutation(), { wrapper });
 
     // Act
@@ -46,8 +52,8 @@ describe('useDeleteClientMutation', () => {
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
     // (Plano 4.1.4): Testar se api.delete é chamado com o id correto
-    expect(api.delete).toHaveBeenCalledTimes(1);
-    expect(api.delete).toHaveBeenCalledWith(`/api/clients/${clientId}`);
+    expect(mockApi.delete).toHaveBeenCalledTimes(1);
+    expect(mockApi.delete).toHaveBeenCalledWith(`/api/clients/${clientId}`);
 
     // (Plano 4.1.4): Testar se queryClient.invalidateQueries é chamado no onSuccess
     expect(queryClient.invalidateQueries).toHaveBeenCalledTimes(1);
@@ -65,7 +71,7 @@ describe('useDeleteClientMutation', () => {
     // Arrange
     const { wrapper, queryClient } = createWrapper();
     const mockError = new Error('API Error');
-    vi.mocked(api.delete).mockRejectedValue(mockError);
+    vi.mocked(mockApi.delete).mockRejectedValue(mockError);
     const { result } = renderHook(() => useDeleteClientMutation(), { wrapper });
 
     // Act

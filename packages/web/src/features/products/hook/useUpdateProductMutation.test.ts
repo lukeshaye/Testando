@@ -6,26 +6,12 @@ import React from 'react';
 // VIOLAÇÃO CORRIGIDA: Remove a dependência de baixoível (supabase)
 // import { supabase } from '@/packages/lib/supabase';
 
-// CORREÇÃO (DIP): Importa a abstração (Hono RPC) para mocká-la
-import { api } from '@/packages/web/src/lib/api';
+import { useAuthenticatedApi } from '@/hooks/useAuthenticatedApi';
 import { ProductType } from '@/packages/shared-types';
 import { useUpdateProductMutation } from './useUpdateProductMutation';
 
-// 1. Mockar a chamada à abstração 'api' (Princípio PTE 2.15)
-// A implementação de updateProduct chama:
-// api.products[':id'].$put({ param: { id }, json: updateData })
-vi.mock('@/packages/web/src/lib/api', () => ({
-  api: {
-    products: {
-      ':id': {
-        $put: vi.fn(),
-      },
-    },
-  },
-}));
-
-// Typecasting para facilitar o uso do mock
-const mockedApiPut = api.products[':id'].$put as vi.Mock;
+// 1. Mockar o hook de autenticação (Princípio PTE 2.15)
+vi.mock('@/hooks/useAuthenticatedApi');
 
 // 2. Criar um wrapper de teste para o React Query
 const createTestQueryClient = () => {
@@ -53,8 +39,18 @@ const createWrapper = () => {
 };
 
 // 3. Limpar mocks antes de cada teste
+const mockApi = {
+  products: {
+    ':id': {
+      $put: vi.fn(),
+    },
+  },
+};
+
 beforeEach(() => {
   vi.resetAllMocks();
+  // Configurar o mock do hook de autenticação
+  (useAuthenticatedApi as any).mockReturnValue(mockApi);
   if (queryClient) {
     queryClient.clear();
   }
@@ -91,7 +87,7 @@ describe('useUpdateProductMutation (Teste de Hook - PTE 2.15)', () => {
   it('DEVE atualizar um produto com sucesso e invalidar o cache de "products" (CQRS Command)', async () => {
     // Arrange
     // Configura o mock da API para um retorno de sucesso
-    mockedApiPut.mockResolvedValue({
+    mockApi.products[':id'].$put.mockResolvedValue({
       ok: true,
       json: async () => updatedProductData,
     });
@@ -112,8 +108,8 @@ describe('useUpdateProductMutation (Teste de Hook - PTE 2.15)', () => {
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
     // 1. Verifica se a API foi chamada corretamente
-    expect(mockedApiPut).toHaveBeenCalledTimes(1);
-    expect(mockedApiPut).toHaveBeenCalledWith({
+    expect(mockApi.products[':id'].$put).toHaveBeenCalledTimes(1);
+    expect(mockApi.products[':id'].$put).toHaveBeenCalledWith({
       param: { id: updatedProductData.id.toString() },
       json: updateData,
     });
@@ -131,7 +127,7 @@ describe('useUpdateProductMutation (Teste de Hook - PTE 2.15)', () => {
   it('DEVE retornar um erro se a chamada à API falhar (ok: false) e NÃO invalidar o cache', async () => {
     // Arrange
     const mockErrorMsg = 'Falha na atualização (ex: RLS)';
-    mockedApiPut.mockResolvedValue({
+    mockApi.products[':id'].$put.mockResolvedValue({
       ok: false,
       json: async () => ({ message: mockErrorMsg }),
       statusText: 'Bad Request',
@@ -186,6 +182,6 @@ describe('useUpdateProductMutation (Teste de Hook - PTE 2.15)', () => {
     expect(result.current.error?.message).toBe('ID do produto é necessário para atualização.');
 
     // Garante que nenhuma chamada à API foi feita
-    expect(mockedApiPut).not.toHaveBeenCalled();
+    expect(mockApi.products[':id'].$put).not.toHaveBeenCalled();
   });
 });

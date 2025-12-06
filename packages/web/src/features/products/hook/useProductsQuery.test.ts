@@ -6,23 +6,12 @@ import React from 'react';
 // VIOLAÇÃO CORRIGIDA: Remove a dependência de baixoível (supabase)
 // import { supabase } from '@/packages/lib/supabase';
 
-// CORREÇÃO (DIP): Importa a abstração (Hono RPC) para mocká-la
-import { api } from '@/packages/web/src/lib/api';
+import { useAuthenticatedApi } from '@/hooks/useAuthenticatedApi';
 import { ProductType } from '@/packages/shared-types';
 import { useProductsQuery } from './useProductsQuery';
 
-// 1. Mockar a chamada à abstração 'api' (Princípio PTE 2.15)
-// A nova implementação de useProductsQuery chama api.products.$get()
-vi.mock('@/packages/web/src/lib/api', () => ({
-  api: {
-    products: {
-      $get: vi.fn(),
-    },
-  },
-}));
-
-// Typecasting para facilitar o uso do mock
-const mockedApiGet = api.products.$get as vi.Mock;
+// 1. Mockar o hook de autenticação (Princípio PTE 2.15)
+vi.mock('@/hooks/useAuthenticatedApi');
 
 // 2. Criar um wrapper de teste para o React Query
 // Isso garante que cada teste tenha um cache limpo e um QueryClient
@@ -48,8 +37,16 @@ const createWrapper = () => {
 };
 
 // 3. Limpar mocks antes de cada teste
+const mockApi = {
+  products: {
+    $get: vi.fn(),
+  },
+};
+
 beforeEach(() => {
   vi.resetAllMocks();
+  // Configurar o mock do hook de autenticação
+  (useAuthenticatedApi as any).mockReturnValue(mockApi);
   if (queryClient) {
     queryClient.clear();
   }
@@ -65,7 +62,7 @@ describe('useProductsQuery (Teste de Hook - PTE 2.15)', () => {
   it('DEVE estar no estado "isLoading" inicialmente', () => {
     // Arrange
     // Configura o mock da API para nunca resolver
-    mockedApiGet.mockReturnValue(new Promise(() => {}));
+    mockApi.products.$get.mockReturnValue(new Promise(() => {}));
 
     // Act
     const { result } = renderHook(() => useProductsQuery(), {
@@ -87,7 +84,7 @@ describe('useProductsQuery (Teste de Hook - PTE 2.15)', () => {
 
     // Mockar a resposta da API (Hono) -
     // A função 'fetchProducts' espera uma resposta com '.ok' e '.json()'
-    mockedApiGet.mockResolvedValue({
+    mockApi.products.$get.mockResolvedValue({
       ok: true,
       json: async () => mockProducts,
     });
@@ -107,8 +104,8 @@ describe('useProductsQuery (Teste de Hook - PTE 2.15)', () => {
     expect(result.current.isError).toBe(false);
 
     // Verifica se a API (abstração) foi chamada
-    expect(mockedApiGet).toHaveBeenCalledTimes(1);
-    expect(mockedApiGet).toHaveBeenCalledWith(); // Verifica se foi chamada sem args
+    expect(mockApi.products.$get).toHaveBeenCalledTimes(1);
+    expect(mockApi.products.$get).toHaveBeenCalledWith(); // Verifica se foi chamada sem args
   });
 
   it('DEVE retornar um erro se a chamada à API falhar (ex: promise rejeitada)', async () => {
@@ -116,7 +113,7 @@ describe('useProductsQuery (Teste de Hook - PTE 2.15)', () => {
     const mockError = new Error('Falha na conexão com a API');
 
     // Mockar a chamada para rejeitar (simulando falha de rede ou 500)
-    mockedApiGet.mockRejectedValue(mockError);
+    mockApi.products.$get.mockRejectedValue(mockError);
 
     // Act
     const { result } = renderHook(() => useProductsQuery(), {
@@ -138,7 +135,7 @@ describe('useProductsQuery (Teste de Hook - PTE 2.15)', () => {
     const errorResponseMessage = 'Erro interno do servidor';
     
     // Mockar uma resposta com 'ok: false'
-    mockedApiGet.mockResolvedValue({
+    mockApi.products.$get.mockResolvedValue({
       ok: false,
       statusText: 'Internal Server Error',
       json: async () => ({ message: errorResponseMessage }),
@@ -160,7 +157,7 @@ describe('useProductsQuery (Teste de Hook - PTE 2.15)', () => {
   it('DEVE retornar um array vazio se a API retornar "data" como null mas sem erro', async () => {
     // Arrange
     // (Cenário onde a query funciona mas não há dados, e a API retorna null)
-    mockedApiGet.mockResolvedValue({
+    mockApi.products.$get.mockResolvedValue({
       ok: true,
       json: async () => null,
     });

@@ -14,19 +14,13 @@ import { renderHook, waitFor } from "@testing-library/react"
 import { vi } from "vitest"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { fetchProfessionals, useProfessionalsQuery } from "./useProfessionalsQuery"
-import { api } from "@/packages/web/src/lib/api" // Dependência a ser mockada
+import { useAuthenticatedApi } from "@/hooks/useAuthenticatedApi"
 import { ProfessionalType } from "@/packages/shared-types"
 
 // --- Mocking de Dependências (PTE 2.15) ---
 
-// 1. Mock do cliente 'api' Hono RPC
-vi.mock("@/packages/web/src/lib/api", () => ({
-  api: {
-    professionals: {
-      $get: vi.fn(),
-    },
-  },
-}))
+// 1. Mock do hook de autenticação
+vi.mock("@/hooks/useAuthenticatedApi")
 
 // 2. Criar um wrapper do QueryClient para os testes do hook
 const createTestQueryClient = () =>
@@ -76,14 +70,20 @@ const mockProfessionals: ProfessionalType[] = [
   },
 ]
 
-// Cast do mock para o tipo correto da API
-const mockedApiGet = vi.mocked(api.professionals.$get)
+// Mock do API
+const mockApi = {
+  professionals: {
+    $get: vi.fn(),
+  },
+}
 
 // --- Testes ---
 
 describe("fetchProfessionals", () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    // Configurar o mock do hook de autenticação
+    (useAuthenticatedApi as any).mockReturnValue(mockApi)
     vi.spyOn(console, "error").mockImplementation(() => {}) // Suprime logs de erro
   })
 
@@ -93,7 +93,7 @@ describe("fetchProfessionals", () => {
 
   test("deve retornar a lista de profissionais em caso de sucesso", async () => {
     // Configura o mock de sucesso
-    mockedApiGet.mockResolvedValue({
+    mockApi.professionals.$get.mockResolvedValue({
       ok: true,
       json: async () => mockProfessionals,
       status: 200,
@@ -103,13 +103,13 @@ describe("fetchProfessionals", () => {
     const professionals = await fetchProfessionals()
 
     expect(professionals).toEqual(mockProfessionals)
-    expect(mockedApiGet).toHaveBeenCalledTimes(1)
+    expect(mockApi.professionals.$get).toHaveBeenCalledTimes(1)
   })
 
   test("deve lançar um erro se a resposta da API não for 'ok' (com JSON)", async () => {
     const errorResponse = { message: "Acesso Negado" }
     // Configura o mock de erro
-    mockedApiGet.mockResolvedValue({
+    mockApi.professionals.$get.mockResolvedValue({
       ok: false,
       json: async () => errorResponse,
       status: 403,
@@ -125,7 +125,7 @@ describe("fetchProfessionals", () => {
 
   test("deve lançar um erro com statusText se o JSON do erro falhar", async () => {
     // Configura o mock de erro
-    mockedApiGet.mockResolvedValue({
+    mockApi.professionals.$get.mockResolvedValue({
       ok: false,
       json: async () => {
         throw new Error("JSON parse error")
@@ -145,6 +145,8 @@ describe("fetchProfessionals", () => {
 describe("useProfessionalsQuery", () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    // Configurar o mock do hook de autenticação
+    (useAuthenticatedApi as any).mockReturnValue(mockApi)
     vi.spyOn(console, "error").mockImplementation(() => {}) // Suprime logs de erro
   })
 
@@ -153,7 +155,7 @@ describe("useProfessionalsQuery", () => {
   })
 
   test("deve buscar dados com sucesso e preencher 'data' (PGEC)", async () => {
-    mockedApiGet.mockResolvedValue({
+    mockApi.professionals.$get.mockResolvedValue({
       ok: true,
       json: async () => mockProfessionals,
       status: 200,
@@ -173,7 +175,7 @@ describe("useProfessionalsQuery", () => {
 
   test("deve lidar com erro e preencher 'error' (PGEC)", async () => {
     const errorMessage = "Falha na busca"
-    mockedApiGet.mockResolvedValue({
+    mockApi.professionals.$get.mockResolvedValue({
       ok: false,
       json: async () => ({ message: errorMessage }),
       status: 500,

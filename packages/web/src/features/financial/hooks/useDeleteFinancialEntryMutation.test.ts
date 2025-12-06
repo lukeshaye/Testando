@@ -1,20 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook } from '@testing-library/react';
 import { useDeleteFinancialEntryMutation } from './useDeleteFinancialEntryMutation';
-import { api } from '@/packages/web/src/lib/api';
+import { useAuthenticatedApi } from '@/hooks/useAuthenticatedApi';
 import { useQueryClient } from '@tanstack/react-query';
 
-// 1. Mock do módulo de API (Hono RPC)
-// Simulamos a estrutura aninhada api.financial[':id'].$delete
-vi.mock('@/packages/web/src/lib/api', () => ({
-  api: {
-    financial: {
-      ':id': {
-        $delete: vi.fn(),
-      },
-    },
-  },
-}));
+// 1. Mock do hook de autenticação
+vi.mock('@/hooks/useAuthenticatedApi');
 
 // 2. Mock do React Query
 // Zombamos o useQueryClient para verificar a invalidação de cache
@@ -28,12 +19,19 @@ vi.mock('@tanstack/react-query', async (importOriginal) => {
 });
 
 describe('useDeleteFinancialEntryMutation', () => {
+  const mockApi = {
+    financial: {
+      ':id': {
+        $delete: vi.fn(),
+      },
+    },
+  };
   const mockInvalidateQueries = vi.fn();
-  // Cast para acessar o mock da função delete
-  const mockDelete = api.financial[':id'].$delete as unknown as ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
     vi.clearAllMocks();
+    // Configurar o mock do hook de autenticação
+    (useAuthenticatedApi as any).mockReturnValue(mockApi);
     (useQueryClient as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
       invalidateQueries: mockInvalidateQueries,
     });
@@ -41,7 +39,7 @@ describe('useDeleteFinancialEntryMutation', () => {
 
   it('deve chamar a API corretamente e invalidar o cache em caso de sucesso', async () => {
     // Configura o mock para retornar sucesso
-    mockDelete.mockResolvedValue({
+    mockApi.financial[':id'].$delete.mockResolvedValue({
       ok: true,
       json: async () => ({ success: true }),
     });
@@ -54,7 +52,7 @@ describe('useDeleteFinancialEntryMutation', () => {
     await result.current.mutateAsync(entryId);
 
     // Verifica se a API foi chamada com o parâmetro correto (ID como string)
-    expect(mockDelete).toHaveBeenCalledWith({
+    expect(mockApi.financial[':id'].$delete).toHaveBeenCalledWith({
       param: { id: '123' },
     });
 
@@ -66,7 +64,7 @@ describe('useDeleteFinancialEntryMutation', () => {
 
   it('deve lançar um erro se a resposta da API não for ok', async () => {
     // Configura o mock para simular erro
-    mockDelete.mockResolvedValue({
+    mockApi.financial[':id'].$delete.mockResolvedValue({
       ok: false,
     });
 

@@ -4,12 +4,12 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import React from 'react';
-import { api } from '@/packages/web/src/lib/api';
+import { useAuthenticatedApi } from '@/hooks/useAuthenticatedApi';
 import { useClientsQuery } from './useClientsQuery';
 import type { ClientType } from '@/packages/shared-types';
 
-// Mockar o módulo da API conforme Princípio DIP (2.9)
-vi.mock('@/packages/web/src/lib/api');
+// Mockar o hook de autenticação conforme Princípio PTE (2.15)
+vi.mock('@/hooks/useAuthenticatedApi');
 
 // Wrapper helper para prover o QueryClient (padrão para testes com React Query)
 const createWrapper = () => {
@@ -47,14 +47,20 @@ const mockClients: ClientType[] = [
 ];
 
 describe('useClientsQuery', () => {
+  const mockApi = {
+    get: vi.fn(),
+  };
+
   beforeEach(() => {
     // Resetar mocks antes de cada teste
     vi.resetAllMocks();
+    // Configurar o mock do hook de autenticação
+    (useAuthenticatedApi as any).mockReturnValue(mockApi);
   });
 
   it('should be in loading state initially', () => {
     // Arrange
-    vi.mocked(api.get).mockResolvedValue({ data: mockClients });
+    vi.mocked(mockApi.get).mockResolvedValue({ data: mockClients });
     const wrapper = createWrapper();
 
     // Act
@@ -67,7 +73,7 @@ describe('useClientsQuery', () => {
 
   it('should fetch clients, call api.get, and return data on success', async () => {
     // Arrange
-    vi.mocked(api.get).mockResolvedValue({ data: mockClients });
+    vi.mocked(mockApi.get).mockResolvedValue({ data: mockClients });
     const wrapper = createWrapper();
 
     // Act
@@ -77,8 +83,8 @@ describe('useClientsQuery', () => {
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
     // Assert (Plano 4.1.1: Testar se o hook chama api.get('/api/clients'))
-    expect(api.get).toHaveBeenCalledTimes(1);
-    expect(api.get).toHaveBeenCalledWith('/api/clients');
+    expect(mockApi.get).toHaveBeenCalledTimes(1);
+    expect(mockApi.get).toHaveBeenCalledWith('/api/clients');
 
     expect(result.current.data).toEqual(mockClients);
     expect(result.current.isLoading).toBe(false);
@@ -88,7 +94,7 @@ describe('useClientsQuery', () => {
   it('should return an error state on fetch failure', async () => {
     // Arrange
     const mockError = new Error('Failed to fetch clients');
-    vi.mocked(api.get).mockRejectedValue(mockError);
+    vi.mocked(mockApi.get).mockRejectedValue(mockError);
     const wrapper = createWrapper();
 
     // Act

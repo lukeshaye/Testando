@@ -1,7 +1,7 @@
 import { renderHook, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { vi, describe, it, expect, beforeEach } from 'vitest'
-import { api } from '@/packages/web/src/lib/api' // Import a ser mockado
+import { useAuthenticatedApi } from '@/hooks/useAuthenticatedApi'
 import { useUpdateProfessionalMutation } from './useUpdateProfessionalMutation'
 import type { ProfessionalType, ProfessionalSchema } from '@/packages/shared-types'
 import { z } from 'zod'
@@ -10,17 +10,9 @@ import { z } from 'zod'
 type UpdateProfessionalInput = z.infer<typeof ProfessionalSchema>
 
 /**
- * Mock do cliente API (Hono/RPC) para simular a chamada PUT de atualização.
+ * Mock do hook de autenticação.
  */
-vi.mock('@/packages/web/src/lib/api', () => ({
-  api: {
-    professionals: {
-      ':id': {
-        $put: vi.fn(),
-      },
-    },
-  },
-}))
+vi.mock('@/hooks/useAuthenticatedApi')
 
 // Dados mockados de entrada e resposta
 const MOCK_ID = 42
@@ -44,7 +36,13 @@ const mockResponse: ProfessionalType = {
 }
 
 describe('useUpdateProfessionalMutation', () => {
-  const mockedApi = vi.mocked(api)
+  const mockApi = {
+    professionals: {
+      ':id': {
+        $put: vi.fn(),
+      },
+    },
+  }
   
   // Setup do QueryClient e Spy
   const queryClient = new QueryClient({
@@ -64,6 +62,8 @@ describe('useUpdateProfessionalMutation', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+    // Configurar o mock do hook de autenticação
+    (useAuthenticatedApi as any).mockReturnValue(mockApi)
     queryClient.clear()
     invalidateSpy.mockClear()
   })
@@ -82,7 +82,7 @@ describe('useUpdateProfessionalMutation', () => {
     const payloadForApi = { ...expectedPayload, created_at: MOCK_CREATED_AT }
 
     // Simula a resposta da API
-    mockedApi.professionals[':id'].$put.mockResolvedValue({
+    mockApi.professionals[':id'].$put.mockResolvedValue({
       ok: true,
       json: async () => mockResponse,
       status: 200,
@@ -103,7 +103,7 @@ describe('useUpdateProfessionalMutation', () => {
 
     // Assert 2: Verifica se a função da API foi chamada corretamente
     // A chamada deve incluir o ID no 'param' e o restante dos dados (incluindo created_at) no 'json'.
-    expect(mockedApi.professionals[':id'].$put).toHaveBeenCalledWith({
+    expect(mockApi.professionals[':id'].$put).toHaveBeenCalledWith({
       param: { id: MOCK_ID.toString() },
       json: payloadForApi,
     })
@@ -120,7 +120,7 @@ describe('useUpdateProfessionalMutation', () => {
   it('should handle API failure and return an error without invalidating cache', async () => {
     // Arrange
     const errorBody = { message: 'ID not found' }
-    mockedApi.professionals[':id'].$put.mockResolvedValue({
+    mockApi.professionals[':id'].$put.mockResolvedValue({
       ok: false,
       status: 404,
       statusText: 'Not Found',
@@ -159,7 +159,7 @@ describe('useUpdateProfessionalMutation', () => {
     // Na prática, se o hook for corrigido para DEIXAR DE TER a checagem manual,
     // a mutação falhará porque o Zod (ou a API) esperaria o ID.
     // Assumimos que a ausência do ID causa uma falha na infraestrutura de API, simulando o erro.
-    mockedApi.professionals[':id'].$put.mockRejectedValue(new Error('Zod validation failed: ID is required'))
+    mockApi.professionals[':id'].$put.mockRejectedValue(new Error('Zod validation failed: ID is required'))
 
     // Act
     const { result } = renderHook(() => useUpdateProfessionalMutation(), {

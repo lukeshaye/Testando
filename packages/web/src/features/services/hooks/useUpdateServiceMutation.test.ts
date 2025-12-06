@@ -2,19 +2,11 @@ import { renderHook, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import { useUpdateServiceMutation } from './useUpdateServiceMutation';
-import { api } from '@/packages/web/src/lib/api';
+import { useAuthenticatedApi } from '@/hooks/useAuthenticatedApi';
 import { ServiceType } from '@/packages/shared-types';
 
-// Mock da api Hono RPC com rota dinâmica :id
-vi.mock('@/packages/web/src/lib/api', () => ({
-  api: {
-    services: {
-      ':id': {
-        $put: vi.fn(),
-      },
-    },
-  },
-}));
+// Mock do hook de autenticação
+vi.mock('@/hooks/useAuthenticatedApi');
 
 // Mock do useToast
 const mockToast = vi.fn();
@@ -26,9 +18,18 @@ vi.mock('@/components/ui/use-toast', () => ({
 
 describe('useUpdateServiceMutation', () => {
   let queryClient: QueryClient;
+  const mockApi = {
+    services: {
+      ':id': {
+        $put: vi.fn(),
+      },
+    },
+  };
 
   beforeEach(() => {
     vi.clearAllMocks();
+    // Configurar o mock do hook de autenticação
+    (useAuthenticatedApi as any).mockReturnValue(mockApi);
     queryClient = new QueryClient({
       defaultOptions: {
         queries: { retry: false },
@@ -54,7 +55,7 @@ describe('useUpdateServiceMutation', () => {
     const invalidateQueriesSpy = vi.spyOn(queryClient, 'invalidateQueries');
     
     // Mock da resposta de sucesso da API (RPC Pattern)
-    (api.services[':id'].$put as any).mockResolvedValueOnce({
+    mockApi.services[':id'].$put.mockResolvedValueOnce({
       ok: true,
       json: async () => updateData,
     });
@@ -69,7 +70,7 @@ describe('useUpdateServiceMutation', () => {
     // Verificações
     await waitFor(() => {
       // Verifica se o ID foi passado no param e os dados no json
-      expect(api.services[':id'].$put).toHaveBeenCalledWith({
+      expect(mockApi.services[':id'].$put).toHaveBeenCalledWith({
         param: { id: updateData.id.toString() },
         json: updateData,
       });
@@ -96,7 +97,7 @@ describe('useUpdateServiceMutation', () => {
     const errorMessage = 'Erro de validação';
 
     // Mock de erro da API (Simulando !res.ok)
-    (api.services[':id'].$put as any).mockResolvedValueOnce({
+    mockApi.services[':id'].$put.mockResolvedValueOnce({
       ok: false,
       statusText: errorMessage,
       json: async () => ({ message: errorMessage }),
