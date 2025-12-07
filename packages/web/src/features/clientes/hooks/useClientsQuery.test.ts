@@ -1,22 +1,25 @@
-// /packages/web/src/features/clients/hooks/useClientsQuery.test.ts
+// packages/web/src/features/clients/hooks/useClientsQuery.test.ts
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import React from 'react';
-import { api } from '@/packages/web/src/lib/api';
+// 1. Remover importação antiga da api
+// import { api } from '@/packages/web/src/lib/api';
 import { useClientsQuery } from './useClientsQuery';
 import type { ClientType } from '@/packages/shared-types';
 
-// Mockar o módulo da API conforme Princípio DIP (2.9)
-vi.mock('@/packages/web/src/lib/api');
+// 2. Adicionar importação do hook autenticado e mockar
+import { useAuthenticatedApi } from '@/hooks/useAuthenticatedApi';
 
-// Wrapper helper para prover o QueryClient (padrão para testes com React Query)
+vi.mock('@/hooks/useAuthenticatedApi');
+
+// Wrapper helper para prover o QueryClient
 const createWrapper = () => {
   const queryClient = new QueryClient({
     defaultOptions: {
       queries: {
-        retry: false, // Desabilitar retentativas nos testes
+        retry: false,
       },
     },
   });
@@ -26,7 +29,7 @@ const createWrapper = () => {
   );
 };
 
-// Dados mockados para os testes
+// Dados mockados
 const mockClients: ClientType[] = [
   {
     id: '1',
@@ -47,39 +50,59 @@ const mockClients: ClientType[] = [
 ];
 
 describe('useClientsQuery', () => {
+  // Mock da função de fetch do RPC
+  const mockGet = vi.fn();
+
   beforeEach(() => {
-    // Resetar mocks antes de cada teste
     vi.resetAllMocks();
+
+    // 3. Configurar o mock do useAuthenticatedApi com a estrutura RPC
+    (useAuthenticatedApi as any).mockReturnValue({
+      api: {
+        clients: {
+          $get: mockGet,
+        },
+      },
+    });
   });
 
   it('should be in loading state initially', () => {
     // Arrange
-    vi.mocked(api.get).mockResolvedValue({ data: mockClients });
+    // Simula uma promise pendente ou sucesso (o estado inicial do hook é loading independente da resposta imediata)
+    mockGet.mockResolvedValue({
+        ok: true,
+        json: async () => mockClients
+    });
+    
     const wrapper = createWrapper();
 
     // Act
     const { result } = renderHook(() => useClientsQuery(), { wrapper });
 
-    // Assert (Plano 4.1.1: Testar estado isLoading)
+    // Assert
     expect(result.current.isLoading).toBe(true);
     expect(result.current.data).toBeUndefined();
   });
 
-  it('should fetch clients, call api.get, and return data on success', async () => {
+  it('should fetch clients, call api.clients.$get, and return data on success', async () => {
     // Arrange
-    vi.mocked(api.get).mockResolvedValue({ data: mockClients });
+    // Simula resposta de sucesso do RPC (response.ok = true e .json() retorna os dados)
+    mockGet.mockResolvedValue({
+      ok: true,
+      json: async () => mockClients,
+    });
+
     const wrapper = createWrapper();
 
     // Act
     const { result } = renderHook(() => useClientsQuery(), { wrapper });
 
-    // Assert (Plano 4.1.1: Testar estados data, isLoading)
+    // Assert
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
-    // Assert (Plano 4.1.1: Testar se o hook chama api.get('/api/clients'))
-    expect(api.get).toHaveBeenCalledTimes(1);
-    expect(api.get).toHaveBeenCalledWith('/api/clients');
-
+    expect(mockGet).toHaveBeenCalledTimes(1);
+    // No RPC não testamos a URL string ('/api/clients'), pois é implícito na estrutura do objeto
+    
     expect(result.current.data).toEqual(mockClients);
     expect(result.current.isLoading).toBe(false);
     expect(result.current.isError).toBe(false);
@@ -88,13 +111,16 @@ describe('useClientsQuery', () => {
   it('should return an error state on fetch failure', async () => {
     // Arrange
     const mockError = new Error('Failed to fetch clients');
-    vi.mocked(api.get).mockRejectedValue(mockError);
+    
+    // Simula falha na chamada (ex: erro de rede)
+    mockGet.mockRejectedValue(mockError);
+    
     const wrapper = createWrapper();
 
     // Act
     const { result } = renderHook(() => useClientsQuery(), { wrapper });
 
-    // Assert (Plano 4.1.1: Testar estado isError)
+    // Assert
     await waitFor(() => expect(result.current.isError).toBe(true));
 
     expect(result.current.error).toBe(mockError);
