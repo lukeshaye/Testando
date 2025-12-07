@@ -2,21 +2,27 @@ import { renderHook, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import { useServicesQuery } from './useServicesQuery';
-import { api } from '@/packages/web/src/lib/api';
+// 1. Nova importação do hook de autenticação
+import { useAuthenticatedApi } from '@/hooks/useAuthenticatedApi';
 
-// Mock da api Hono RPC conforme Passo 2 das Instruções
-vi.mock('@/packages/web/src/lib/api', () => ({
-  api: {
-    services: {
-      $get: vi.fn(),
-    },
-  },
-}));
+// 2. Mock do hook useAuthenticatedApi
+vi.mock('@/hooks/useAuthenticatedApi');
 
 describe('useServicesQuery', () => {
-  // Limpa os mocks antes de cada teste
+  // Criamos uma função mock para o método específico que será chamado ($get)
+  const mockGet = vi.fn();
+
   beforeEach(() => {
     vi.clearAllMocks();
+
+    // 3. Configuramos o mock do hook para retornar a estrutura da API esperada
+    (useAuthenticatedApi as any).mockReturnValue({
+      api: {
+        services: {
+          $get: mockGet,
+        },
+      },
+    });
   });
 
   // Wrapper com QueryClientProvider necessário para hooks do React Query
@@ -39,8 +45,8 @@ describe('useServicesQuery', () => {
       { id: 2, name: 'Barba', price: 30, duration: 20, color: '#ffffff' },
     ];
 
-    // Simula resposta de sucesso do Hono RPC (interface fetch-like)
-    (api.services.$get as any).mockResolvedValue({
+    // Simula resposta de sucesso no mock local
+    mockGet.mockResolvedValue({
       ok: true,
       json: async () => mockData,
     });
@@ -54,13 +60,12 @@ describe('useServicesQuery', () => {
 
     // Verificações
     expect(result.current.data).toEqual(mockData);
-    // O cliente RPC já encapsula a rota, verificamos apenas a chamada do método correto
-    expect(api.services.$get).toHaveBeenCalled();
+    expect(mockGet).toHaveBeenCalled();
   });
 
   it('deve lidar com erros quando a resposta da API não for ok (!res.ok)', async () => {
-    // Simula erro da API (ex: 400 ou 500) onde !res.ok é verdadeiro
-    (api.services.$get as any).mockResolvedValue({
+    // Simula erro da API no mock local
+    mockGet.mockResolvedValue({
       ok: false,
       statusText: 'Erro ao buscar serviços',
       json: async () => ({ message: 'Erro interno' }),
@@ -75,6 +80,6 @@ describe('useServicesQuery', () => {
 
     // Verificações
     expect(result.current.error).toBeDefined();
-    expect(api.services.$get).toHaveBeenCalled();
+    expect(mockGet).toHaveBeenCalled();
   });
 });
