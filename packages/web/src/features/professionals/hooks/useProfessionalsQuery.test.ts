@@ -1,32 +1,25 @@
 /*
  * Arquivo de Destino: /packages/web/src/features/professionals/hooks/useProfessionalsQuery.test.ts
  *
- * Tarefa: 4. Testes (PTE 2.15)
+ * Tarefa: 4. Testes (Refatorado para useAuthenticatedApi)
  *
  * Princípios:
- * - PTE (2.15): Mocka a dependência externa (o cliente 'api' Hono RPC)
- * para isolar a lógica do hook e da função de fetch.
- * - PGEC (2.13): Testa os estados de sucesso (data) e erro (error)
- * retornados pelo useQuery.
+ * - PTE (2.15): Mocka o hook de autenticação para isolar a lógica.
+ * - PGEC (2.13): Testa os estados de sucesso e erro.
  */
 
 import { renderHook, waitFor } from "@testing-library/react"
 import { vi } from "vitest"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { fetchProfessionals, useProfessionalsQuery } from "./useProfessionalsQuery"
-import { api } from "@/packages/web/src/lib/api" // Dependência a ser mockada
+// [REFATORADO] Importação do hook de autenticação
+import { useAuthenticatedApi } from "@/packages/web/src/hooks/useAuthenticatedApi"
 import { ProfessionalType } from "@/packages/shared-types"
 
 // --- Mocking de Dependências (PTE 2.15) ---
 
-// 1. Mock do cliente 'api' Hono RPC
-vi.mock("@/packages/web/src/lib/api", () => ({
-  api: {
-    professionals: {
-      $get: vi.fn(),
-    },
-  },
-}))
+// [REFATORADO] 1. Mock do hook useAuthenticatedApi
+vi.mock("@/packages/web/src/hooks/useAuthenticatedApi")
 
 // 2. Criar um wrapper do QueryClient para os testes do hook
 const createTestQueryClient = () =>
@@ -76,15 +69,28 @@ const mockProfessionals: ProfessionalType[] = [
   },
 ]
 
-// Cast do mock para o tipo correto da API
-const mockedApiGet = vi.mocked(api.professionals.$get)
+// [REFATORADO] Configuração do Mock da API
+const mockGet = vi.fn()
+
+const mockApi = {
+  professionals: {
+    $get: mockGet,
+  },
+}
+
+// Configura o hook para retornar o mockApi
+;(useAuthenticatedApi as any).mockReturnValue({
+  api: mockApi,
+})
 
 // --- Testes ---
 
 describe("fetchProfessionals", () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    vi.spyOn(console, "error").mockImplementation(() => {}) // Suprime logs de erro
+    // Garante que o hook retorne o mock atualizado a cada teste
+    ;(useAuthenticatedApi as any).mockReturnValue({ api: mockApi })
+    vi.spyOn(console, "error").mockImplementation(() => {})
   })
 
   afterEach(() => {
@@ -93,30 +99,34 @@ describe("fetchProfessionals", () => {
 
   test("deve retornar a lista de profissionais em caso de sucesso", async () => {
     // Configura o mock de sucesso
-    mockedApiGet.mockResolvedValue({
+    mockGet.mockResolvedValue({
       ok: true,
       json: async () => mockProfessionals,
       status: 200,
       statusText: "OK",
-    } as any) // 'as any' para simplificar a estrutura do mock da Response
+    } as any)
 
-    const professionals = await fetchProfessionals()
+    // [REFATORADO] Passamos o mockApi como dependência
+    const professionals = await fetchProfessionals(mockApi as any)
 
     expect(professionals).toEqual(mockProfessionals)
-    expect(mockedApiGet).toHaveBeenCalledTimes(1)
+    expect(mockGet).toHaveBeenCalledTimes(1)
   })
 
   test("deve lançar um erro se a resposta da API não for 'ok' (com JSON)", async () => {
     const errorResponse = { message: "Acesso Negado" }
     // Configura o mock de erro
-    mockedApiGet.mockResolvedValue({
+    mockGet.mockResolvedValue({
       ok: false,
       json: async () => errorResponse,
       status: 403,
       statusText: "Forbidden",
     } as any)
 
-    await expect(fetchProfessionals()).rejects.toThrow("Acesso Negado")
+    // [REFATORADO] Passamos o mockApi como dependência
+    await expect(fetchProfessionals(mockApi as any)).rejects.toThrow(
+      "Acesso Negado",
+    )
     expect(console.error).toHaveBeenCalledWith(
       "Error fetching professionals:",
       "Acesso Negado",
@@ -125,7 +135,7 @@ describe("fetchProfessionals", () => {
 
   test("deve lançar um erro com statusText se o JSON do erro falhar", async () => {
     // Configura o mock de erro
-    mockedApiGet.mockResolvedValue({
+    mockGet.mockResolvedValue({
       ok: false,
       json: async () => {
         throw new Error("JSON parse error")
@@ -134,7 +144,10 @@ describe("fetchProfessionals", () => {
       statusText: "Internal Server Error",
     } as any)
 
-    await expect(fetchProfessionals()).rejects.toThrow("Internal Server Error")
+    // [REFATORADO] Passamos o mockApi como dependência
+    await expect(fetchProfessionals(mockApi as any)).rejects.toThrow(
+      "Internal Server Error",
+    )
     expect(console.error).toHaveBeenCalledWith(
       "Error fetching professionals:",
       "Internal Server Error",
@@ -145,7 +158,8 @@ describe("fetchProfessionals", () => {
 describe("useProfessionalsQuery", () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    vi.spyOn(console, "error").mockImplementation(() => {}) // Suprime logs de erro
+    ;(useAuthenticatedApi as any).mockReturnValue({ api: mockApi })
+    vi.spyOn(console, "error").mockImplementation(() => {})
   })
 
   afterEach(() => {
@@ -153,7 +167,7 @@ describe("useProfessionalsQuery", () => {
   })
 
   test("deve buscar dados com sucesso e preencher 'data' (PGEC)", async () => {
-    mockedApiGet.mockResolvedValue({
+    mockGet.mockResolvedValue({
       ok: true,
       json: async () => mockProfessionals,
       status: 200,
@@ -162,7 +176,6 @@ describe("useProfessionalsQuery", () => {
 
     const { result } = renderHook(() => useProfessionalsQuery(), { wrapper })
 
-    // Espera o hook resolver
     await waitFor(() => expect(result.current.isSuccess).toBe(true))
 
     expect(result.current.data).toEqual(mockProfessionals)
@@ -173,7 +186,7 @@ describe("useProfessionalsQuery", () => {
 
   test("deve lidar com erro e preencher 'error' (PGEC)", async () => {
     const errorMessage = "Falha na busca"
-    mockedApiGet.mockResolvedValue({
+    mockGet.mockResolvedValue({
       ok: false,
       json: async () => ({ message: errorMessage }),
       status: 500,
@@ -182,7 +195,6 @@ describe("useProfessionalsQuery", () => {
 
     const { result } = renderHook(() => useProfessionalsQuery(), { wrapper })
 
-    // Espera o hook resolver para o estado de erro
     await waitFor(() => expect(result.current.isError).toBe(true))
 
     expect(result.current.data).toBeUndefined()

@@ -1,25 +1,17 @@
 import { renderHook, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { vi, describe, it, expect, beforeEach } from 'vitest'
-import { api } from '@/packages/web/src/lib/api' // Import a ser mockado
+// REMOVIDO: import { api } from '@/packages/web/src/lib/api'
+// ADICIONADO: Import do hook de autenticação
+import { useAuthenticatedApi } from '@/packages/web/src/hooks/useAuthenticatedApi'
 import { useProfessionalByIdQuery } from './useProfessionalByIdQuery'
 import type { ProfessionalType } from '@/packages/shared-types'
 
-/**
- * Mock do cliente API (Hono/RPC).
- * O Plano (1.2) menciona 'supabase', mas o arquivo de implementação
- * (useProfessionalByIdQuery.ts) fornecido usa 'api'.
- * O teste deve refletir o código real fornecido.
- */
-vi.mock('@/packages/web/src/lib/api', () => ({
-  api: {
-    professionals: {
-      ':id': {
-        $get: vi.fn(),
-      },
-    },
-  },
-}))
+// REMOVIDO: Mock estático da api
+// vi.mock('@/packages/web/src/lib/api', ...
+
+// ADICIONADO: Mock do hook de autenticação
+vi.mock('@/packages/web/src/hooks/useAuthenticatedApi')
 
 // Helper para criar um wrapper React Query
 const createWrapper = () => {
@@ -50,17 +42,30 @@ const mockProfessional: ProfessionalType = {
 }
 
 describe('useProfessionalByIdQuery', () => {
-  const mockedApi = vi.mocked(api)
+  // Criamos uma função mock local para controlar o método específico
+  const mockGet = vi.fn()
 
   beforeEach(() => {
     vi.clearAllMocks()
+
+    // Configura o mock do hook para retornar a estrutura da API esperada
+    ;(useAuthenticatedApi as any).mockReturnValue({
+      api: {
+        professionals: {
+          ':id': {
+            $get: mockGet,
+          },
+        },
+      },
+    })
   })
 
   // Teste (PTE 2.15): Verifica se useQuery retorna os dados corretos
   it('should fetch and return a single professional when id is provided', async () => {
     // Arrange
     const professionalId = 1
-    mockedApi.professionals[':id'].$get.mockResolvedValue({
+    
+    mockGet.mockResolvedValue({
       ok: true,
       json: async () => mockProfessional,
       status: 200,
@@ -81,8 +86,8 @@ describe('useProfessionalByIdQuery', () => {
 
     expect(result.current.data).toEqual(mockProfessional)
     expect(result.current.isError).toBe(false)
-    expect(mockedApi.professionals[':id'].$get).toHaveBeenCalledTimes(1)
-    expect(mockedApi.professionals[':id'].$get).toHaveBeenCalledWith({
+    expect(mockGet).toHaveBeenCalledTimes(1)
+    expect(mockGet).toHaveBeenCalledWith({
       param: { id: professionalId.toString() },
     })
   })
@@ -92,7 +97,8 @@ describe('useProfessionalByIdQuery', () => {
     // Arrange
     const professionalId = 2
     const errorResponse = { message: 'Not Found' }
-    mockedApi.professionals[':id'].$get.mockResolvedValue({
+    
+    mockGet.mockResolvedValue({
       ok: false,
       json: async () => errorResponse,
       status: 404,
@@ -130,7 +136,7 @@ describe('useProfessionalByIdQuery', () => {
     expect(result.current.isLoading).toBe(false) // Não deve estar loading (disabled)
     expect(result.current.isFetching).toBe(false)
     expect(result.current.isSuccess).toBe(false)
-    expect(mockedApi.professionals[':id'].$get).not.toHaveBeenCalled()
+    expect(mockGet).not.toHaveBeenCalled()
   })
 
   // Teste (Plano 1.2): Verifica 'enabled: !!id' com outro valor falsy
@@ -149,6 +155,6 @@ describe('useProfessionalByIdQuery', () => {
     // Assert
     expect(result.current.isLoading).toBe(false)
     expect(result.current.isFetching).toBe(false)
-    expect(mockedApi.professionals[':id'].$get).not.toHaveBeenCalled()
+    expect(mockGet).not.toHaveBeenCalled()
   })
 })

@@ -1,26 +1,18 @@
 import { renderHook, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { vi, describe, it, expect, beforeEach } from 'vitest'
-import { api } from '@/packages/web/src/lib/api' // Import a ser mockado
 import { useUpdateProfessionalMutation } from './useUpdateProfessionalMutation'
 import type { ProfessionalType, ProfessionalSchema } from '@/packages/shared-types'
 import { z } from 'zod'
 
+// NOVA IMPORTAÇÃO: Hook de API autenticada
+import { useAuthenticatedApi } from '@/hooks/useAuthenticatedApi'
+
 // Define o tipo de input esperado para o teste
 type UpdateProfessionalInput = z.infer<typeof ProfessionalSchema>
 
-/**
- * Mock do cliente API (Hono/RPC) para simular a chamada PUT de atualização.
- */
-vi.mock('@/packages/web/src/lib/api', () => ({
-  api: {
-    professionals: {
-      ':id': {
-        $put: vi.fn(),
-      },
-    },
-  },
-}))
+// MOCK DO HOOK: Substitui o mock estático da lib/api
+vi.mock('@/hooks/useAuthenticatedApi')
 
 // Dados mockados de entrada e resposta
 const MOCK_ID = 42
@@ -44,7 +36,8 @@ const mockResponse: ProfessionalType = {
 }
 
 describe('useUpdateProfessionalMutation', () => {
-  const mockedApi = vi.mocked(api)
+  // Criamos uma função mock específica para o método $put
+  const mockPut = vi.fn()
   
   // Setup do QueryClient e Spy
   const queryClient = new QueryClient({
@@ -66,23 +59,31 @@ describe('useUpdateProfessionalMutation', () => {
     vi.clearAllMocks()
     queryClient.clear()
     invalidateSpy.mockClear()
+    mockPut.mockReset()
+
+    // CONFIGURAÇÃO DO MOCK DO HOOK
+    // Recriamos a estrutura api.professionals[':id'].$put
+    ;(useAuthenticatedApi as any).mockReturnValue({
+      api: {
+        professionals: {
+          ':id': {
+            $put: mockPut,
+          },
+        },
+      },
+    })
   })
 
   // Teste 1: Sucesso da Mutação e Invalidação de Cache Dupla (PTE 2.15)
-  // O teste agora espera que o hook remova APENAS o 'id' para o corpo da requisição
-  // e envie o objeto completo (incluindo created_at), confiando na API para filtrar.
   it('should call the API passing the full payload (except ID for param) and invalidate caches on success', async () => {
     // Arrange
-    // O payload esperado pela API é o input MENOS o ID, que vai no param.
-    // created_at DEVE ser incluído no JSON (DRY 2.2).
     const { id, created_at, ...expectedPayload } = mockInput
     
-    // O código do hook (que deve ser corrigido) deve apenas separar o ID e enviar o resto.
-    // Se o hook real foi corrigido para não remover o created_at, o payload deve incluir o created_at.
+    // O payload deve incluir o created_at.
     const payloadForApi = { ...expectedPayload, created_at: MOCK_CREATED_AT }
 
-    // Simula a resposta da API
-    mockedApi.professionals[':id'].$put.mockResolvedValue({
+    // Simula a resposta da API usando mockPut
+    mockPut.mockResolvedValue({
       ok: true,
       json: async () => mockResponse,
       status: 200,
@@ -102,8 +103,7 @@ describe('useUpdateProfessionalMutation', () => {
     expect(result.current.data).toEqual(mockResponse)
 
     // Assert 2: Verifica se a função da API foi chamada corretamente
-    // A chamada deve incluir o ID no 'param' e o restante dos dados (incluindo created_at) no 'json'.
-    expect(mockedApi.professionals[':id'].$put).toHaveBeenCalledWith({
+    expect(mockPut).toHaveBeenCalledWith({
       param: { id: MOCK_ID.toString() },
       json: payloadForApi,
     })
@@ -120,7 +120,8 @@ describe('useUpdateProfessionalMutation', () => {
   it('should handle API failure and return an error without invalidating cache', async () => {
     // Arrange
     const errorBody = { message: 'ID not found' }
-    mockedApi.professionals[':id'].$put.mockResolvedValue({
+    
+    mockPut.mockResolvedValue({
       ok: false,
       status: 404,
       statusText: 'Not Found',
@@ -146,20 +147,12 @@ describe('useUpdateProfessionalMutation', () => {
   })
 
   // Teste 3: Falta do ID (DSpP 2.16 - Falha na validação Zod ou na API)
-  // O teste deve agora validar que o erro ocorre, assumindo que a lógica de validação
-  // manual 'throw new Error()' foi removida do hook, delegando a falha à validação Zod
-  // do ProfessionalSchema (ou ao erro da API se o Zod for ignorado).
   it('should fail the mutation if the professional ID is missing, relying on DSpP/Zod validation', async () => {
     // Arrange
-    // Prepara um objeto que falharia na validação Zod, se esta fosse executada.
     const inputWithoutId = { ...mockInput, id: undefined as any }
 
-    // Mockar a rejeição localmente se o Zod for usado no hook.
-    // Como a infraestrutura Zod/Hook não foi detalhada, mockamos uma rejeição genérica.
-    // Na prática, se o hook for corrigido para DEIXAR DE TER a checagem manual,
-    // a mutação falhará porque o Zod (ou a API) esperaria o ID.
-    // Assumimos que a ausência do ID causa uma falha na infraestrutura de API, simulando o erro.
-    mockedApi.professionals[':id'].$put.mockRejectedValue(new Error('Zod validation failed: ID is required'))
+    // Simulamos uma falha caso a chamada chegue a acontecer (ou erro do Zod pré-chamada)
+    mockPut.mockRejectedValue(new Error('Zod validation failed: ID is required'))
 
     // Act
     const { result } = renderHook(() => useUpdateProfessionalMutation(), {
@@ -172,21 +165,14 @@ describe('useUpdateProfessionalMutation', () => {
     // Assert 1: Verifica o estado de erro
     await waitFor(() => expect(result.current.isError).toBe(true))
     
-    // Assert 2: Verifica que a API foi chamada incorretamente OU que a validação falhou
-    // O ponto é que o erro não é mais a mensagem manual 'Professional ID is required...'.
-    expect(result.current.error).toBeInstanceOf(Error)
-    // O teste passa a ser agnóstico à mensagem de erro exata (DSpP 2.16)
-    // e apenas confirma que a mutação falhou e NÃO foi bem-sucedida.
+    // Assert 2: Verifica que a mutação falhou
     expect(result.current.isSuccess).toBe(false)
+    expect(result.current.error).toBeInstanceOf(Error)
     
-    // Como o ID é undefined, a chamada à API é problemática (URL dinâmica)
-    // O teste mais correto (assumindo a correção do hook) é que ele falhe.
-    // Manter a asserção original do auditor, mas adaptada:
     expect(result.current.error?.message).not.toBe(
         'Professional ID is required for an update operation.',
     ) 
 
-    // O mockRejectedValue garante que o teste detecte a falha.
     expect(invalidateSpy).not.toHaveBeenCalled()
   })
 })

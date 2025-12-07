@@ -1,7 +1,8 @@
 import { renderHook, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { vi, describe, it, expect, beforeEach } from 'vitest'
-import { api } from '@/packages/web/src/lib/api' // Import a ser mockado
+// import { api } from '@/packages/web/src/lib/api' // REMOVIDO
+import { useAuthenticatedApi } from '@/hooks/useAuthenticatedApi' // ADICIONADO (Ajuste o caminho se necessário)
 import { useAddProfessionalMutation } from './useAddProfessionalMutation'
 import type { ProfessionalType, CreateProfessionalSchema } from '@/packages/shared-types'
 import { z } from 'zod'
@@ -10,16 +11,10 @@ import { z } from 'zod'
 type AddProfessionalInput = z.infer<typeof CreateProfessionalSchema>
 
 /**
- * Mock do cliente API (Hono/RPC).
- * O código real (useAddProfessionalMutation.ts) utiliza este cliente.
+ * Mock do Hook de Autenticação.
+ * Substitui o mock direto da lib/api.
  */
-vi.mock('@/packages/web/src/lib/api', () => ({
-  api: {
-    professionals: {
-      $post: vi.fn(),
-    },
-  },
-}))
+vi.mock('@/hooks/useAuthenticatedApi')
 
 const mockInput: AddProfessionalInput = {
   name: 'Novo Teste',
@@ -39,7 +34,8 @@ const mockResponse: ProfessionalType = {
 }
 
 describe('useAddProfessionalMutation', () => {
-  const mockedApi = vi.mocked(api)
+  // Criamos o mock da função específica que será usada
+  const mockPost = vi.fn()
   
   // Criamos o QueryClient e o Spy aqui para monitorar invalidateQueries
   const queryClient = new QueryClient({
@@ -60,14 +56,23 @@ describe('useAddProfessionalMutation', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     queryClient.clear() // Limpa o cache entre os testes
-    // Resetar a implementação do spy para não afetar contagens
     invalidateSpy.mockClear()
+
+    // Configura o retorno do hook useAuthenticatedApi
+    // para devolver a estrutura esperada pelo useAddProfessionalMutation
+    vi.mocked(useAuthenticatedApi).mockReturnValue({
+      api: {
+        professionals: {
+          $post: mockPost
+        }
+      }
+    } as any)
   })
 
   // Teste 1: Sucesso da Mutação e Invalidação de Cache (CQRS 2.12 / PTE 2.15)
   it('should call the API with correct data and invalidate professionals cache on success', async () => {
     // Arrange
-    mockedApi.professionals.$post.mockResolvedValue({
+    mockPost.mockResolvedValue({
       ok: true,
       json: async () => mockResponse,
       status: 201,
@@ -86,8 +91,8 @@ describe('useAddProfessionalMutation', () => {
     await waitFor(() => expect(result.current.isSuccess).toBe(true))
     expect(result.current.data).toEqual(mockResponse)
 
-    // Assert 2: Verifica se a função da API foi chamada corretamente
-    expect(mockedApi.professionals.$post).toHaveBeenCalledWith({
+    // Assert 2: Verifica se a função da API foi chamada corretamente (usando o mockPost)
+    expect(mockPost).toHaveBeenCalledWith({
       json: mockInput,
     })
 
@@ -100,7 +105,7 @@ describe('useAddProfessionalMutation', () => {
   it('should handle API failure and return an error without invalidating cache', async () => {
     // Arrange
     const errorBody = { message: 'Validation failed' }
-    mockedApi.professionals.$post.mockResolvedValue({
+    mockPost.mockResolvedValue({
       ok: false,
       status: 400,
       statusText: 'Bad Request',
@@ -129,7 +134,7 @@ describe('useAddProfessionalMutation', () => {
   it('should handle network errors (rejected promise)', async () => {
     // Arrange
     const networkError = new Error('Network timeout')
-    mockedApi.professionals.$post.mockRejectedValue(networkError)
+    mockPost.mockRejectedValue(networkError)
 
     // Act
     const { result } = renderHook(() => useAddProfessionalMutation(), {
