@@ -2,16 +2,15 @@
 
 import { renderHook, waitFor } from '@testing-library/react';
 import { useSettingsQuery } from './useSettingsQuery';
-import { api } from '@/lib/api';
+// import { api } from '@/lib/api'; // REMOVIDO
+import { useAuthenticatedApi } from '@/hooks/useAuthenticatedApi'; // ADICIONADO
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ReactNode } from 'react';
 
 // --- Mocks ---
 
-// Mock do módulo da API
-jest.mock('@/lib/api');
-// Casting para ter acesso aos métodos mockados do Jest
-const mockedApi = api as jest.Mocked<typeof api>;
+// Mock do novo hook de autenticação
+jest.mock('@/hooks/useAuthenticatedApi');
 
 // Helper: Wrapper para fornecer o QueryClient nos testes
 const createWrapper = () => {
@@ -48,8 +47,20 @@ describe('useSettingsQuery', () => {
       businessExceptions: [],
     };
 
-    // Configura o mock para resolver com sucesso
-    mockedApi.get.mockResolvedValueOnce({ data: mockData });
+    // Cria o mock da função de chamada ($get)
+    const mockGet = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => mockData,
+    });
+
+    // Configura o hook useAuthenticatedApi para retornar a estrutura correta
+    (useAuthenticatedApi as jest.Mock).mockReturnValue({
+      api: {
+        settings: {
+          $get: mockGet
+        }
+      }
+    });
 
     // Renderiza o hook dentro do wrapper
     const { result } = renderHook(() => useSettingsQuery(), {
@@ -65,16 +76,24 @@ describe('useSettingsQuery', () => {
     // 3. Verifica se os dados batem com o mock
     expect(result.current.data).toEqual(mockData);
     
-    // 4. Verifica se a API foi chamada com a URL correta
-    expect(mockedApi.get).toHaveBeenCalledTimes(1);
-    expect(mockedApi.get).toHaveBeenCalledWith('/api/settings');
+    // 4. Verifica se a API foi chamada
+    expect(mockGet).toHaveBeenCalledTimes(1);
   });
 
   // --- Teste de Erro (Error Handling) ---
   it('deve retornar erro quando a chamada da API falhar', async () => {
-    // Configura o mock para rejeitar (simular erro 500, etc)
     const error = new Error('Falha no servidor');
-    mockedApi.get.mockRejectedValueOnce(error);
+    
+    // Configura o mock para rejeitar a promessa (erro de rede ou exceção)
+    const mockGet = jest.fn().mockRejectedValue(error);
+
+    (useAuthenticatedApi as jest.Mock).mockReturnValue({
+      api: {
+        settings: {
+          $get: mockGet
+        }
+      }
+    });
 
     const { result } = renderHook(() => useSettingsQuery(), {
       wrapper: createWrapper(),
@@ -88,6 +107,6 @@ describe('useSettingsQuery', () => {
 
     // 3. Verifica se o erro foi capturado
     expect(result.current.error).toBeDefined();
-    expect(mockedApi.get).toHaveBeenCalledTimes(1);
+    expect(mockGet).toHaveBeenCalledTimes(1);
   });
 });

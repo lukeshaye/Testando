@@ -7,16 +7,16 @@ import {
   useAddBusinessExceptionMutation, 
   useDeleteBusinessExceptionMutation 
 } from './useUpdateSettingsMutation';
-import { api } from '@/lib/api';
+// REFATORAÇÃO: Substituído a importação estática pelo Hook
+import { useAuthenticatedApi } from '@/hooks/useAuthenticatedApi';
 import { toast } from 'sonner';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ReactNode } from 'react';
 
 // --- Mocks ---
 
-// 1. Mock da API
-jest.mock('@/lib/api');
-const mockedApi = api as jest.Mocked<typeof api>;
+// 1. Mock do Hook de API (Refatorado)
+jest.mock('@/hooks/useAuthenticatedApi');
 
 // 2. Mock do Sonner (Toast)
 jest.mock('sonner', () => ({
@@ -30,8 +30,20 @@ describe('useUpdateSettingsMutation', () => {
   let queryClient: QueryClient;
   let wrapper: ({ children }: { children: ReactNode }) => JSX.Element;
 
+  // Objeto para simular os métodos da API retornada pelo hook
+  const mockApi = {
+    put: jest.fn(),
+    post: jest.fn(),
+    delete: jest.fn(),
+  };
+
   beforeEach(() => {
     jest.clearAllMocks();
+
+    // Configuração do retorno do Hook useAuthenticatedApi
+    (useAuthenticatedApi as jest.Mock).mockReturnValue({
+      api: mockApi
+    });
 
     // Configuração do React Query para testes
     queryClient = new QueryClient({
@@ -55,7 +67,7 @@ describe('useUpdateSettingsMutation', () => {
 
   describe('useUpdateProfileSettingsMutation', () => {
     it('deve chamar api.put, invalidar queries e mostrar toast de sucesso', async () => {
-      mockedApi.put.mockResolvedValueOnce({ data: {} });
+      mockApi.put.mockResolvedValueOnce({ data: {} });
 
       const { result } = renderHook(() => useUpdateProfileSettingsMutation(), { wrapper });
       const payload = { name: 'Nova Loja', phone: '123' };
@@ -65,14 +77,14 @@ describe('useUpdateSettingsMutation', () => {
       await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
       // Verifica API
-      expect(mockedApi.put).toHaveBeenCalledWith('/api/settings/profile', payload);
+      expect(mockApi.put).toHaveBeenCalledWith('/api/settings/profile', payload);
       // Verifica Lógica DRY (Base Hook)
       expect(queryClient.invalidateQueries).toHaveBeenCalledWith({ queryKey: ['settings'] });
       expect(toast.success).toHaveBeenCalledWith('Perfil atualizado com sucesso!');
     });
 
     it('deve tratar erros corretamente', async () => {
-      mockedApi.put.mockRejectedValueOnce(new Error('Erro API'));
+      mockApi.put.mockRejectedValueOnce(new Error('Erro API'));
       const { result } = renderHook(() => useUpdateProfileSettingsMutation(), { wrapper });
 
       result.current.mutate({ name: 'X' } as any);
@@ -87,7 +99,7 @@ describe('useUpdateSettingsMutation', () => {
 
   describe('useUpdateWorkingHoursMutation', () => {
     it('deve chamar api.put na rota de business-hours', async () => {
-      mockedApi.put.mockResolvedValueOnce({ data: {} });
+      mockApi.put.mockResolvedValueOnce({ data: {} });
       const { result } = renderHook(() => useUpdateWorkingHoursMutation(), { wrapper });
       
       const payload = { hours: [] }; // Payload simplificado
@@ -95,7 +107,7 @@ describe('useUpdateSettingsMutation', () => {
 
       await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
-      expect(mockedApi.put).toHaveBeenCalledWith('/api/settings/business-hours', payload);
+      expect(mockApi.put).toHaveBeenCalledWith('/api/settings/business-hours', payload);
       expect(toast.success).toHaveBeenCalledWith('Horários atualizados com sucesso!');
     });
   });
@@ -104,7 +116,7 @@ describe('useUpdateSettingsMutation', () => {
 
   describe('useAddBusinessExceptionMutation', () => {
     it('deve chamar api.post na rota de exceptions', async () => {
-      mockedApi.post.mockResolvedValueOnce({ data: {} });
+      mockApi.post.mockResolvedValueOnce({ data: {} });
       const { result } = renderHook(() => useAddBusinessExceptionMutation(), { wrapper });
 
       const payload = { description: 'Feriado', exception_date: new Date() };
@@ -112,7 +124,7 @@ describe('useUpdateSettingsMutation', () => {
 
       await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
-      expect(mockedApi.post).toHaveBeenCalledWith('/api/settings/exceptions', payload);
+      expect(mockApi.post).toHaveBeenCalledWith('/api/settings/exceptions', payload);
       expect(toast.success).toHaveBeenCalledWith('Exceção adicionada com sucesso!');
     });
   });
@@ -121,7 +133,7 @@ describe('useUpdateSettingsMutation', () => {
 
   describe('useDeleteBusinessExceptionMutation', () => {
     it('deve chamar api.delete com o ID correto', async () => {
-      mockedApi.delete.mockResolvedValueOnce({ data: {} });
+      mockApi.delete.mockResolvedValueOnce({ data: {} });
       const { result } = renderHook(() => useDeleteBusinessExceptionMutation(), { wrapper });
 
       const exceptionId = 123;
@@ -129,12 +141,12 @@ describe('useUpdateSettingsMutation', () => {
 
       await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
-      expect(mockedApi.delete).toHaveBeenCalledWith('/api/settings/exceptions/123');
+      expect(mockApi.delete).toHaveBeenCalledWith('/api/settings/exceptions/123');
       expect(toast.success).toHaveBeenCalledWith('Exceção removida com sucesso!');
     });
 
     it('deve mostrar toast de erro específico na falha', async () => {
-      mockedApi.delete.mockRejectedValueOnce(new Error('Falha ao deletar'));
+      mockApi.delete.mockRejectedValueOnce(new Error('Falha ao deletar'));
       const { result } = renderHook(() => useDeleteBusinessExceptionMutation(), { wrapper });
 
       result.current.mutate(999);
