@@ -1,23 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook } from '@testing-library/react';
 import { useDeleteFinancialEntryMutation } from './useDeleteFinancialEntryMutation';
-import { api } from '@/packages/web/src/lib/api';
+// 1. Nova importação do hook de autenticação
+import { useAuthenticatedApi } from '@/hooks/useAuthenticatedApi';
 import { useQueryClient } from '@tanstack/react-query';
 
-// 1. Mock do módulo de API (Hono RPC)
-// Simulamos a estrutura aninhada api.financial[':id'].$delete
-vi.mock('@/packages/web/src/lib/api', () => ({
-  api: {
-    financial: {
-      ':id': {
-        $delete: vi.fn(),
-      },
-    },
-  },
-}));
+// 2. Mock do hook useAuthenticatedApi
+vi.mock('@/hooks/useAuthenticatedApi');
 
-// 2. Mock do React Query
-// Zombamos o useQueryClient para verificar a invalidação de cache
+// 3. Mock do React Query (Mantido igual)
 vi.mock('@tanstack/react-query', async (importOriginal) => {
   const actual = await importOriginal();
   return {
@@ -29,18 +20,31 @@ vi.mock('@tanstack/react-query', async (importOriginal) => {
 
 describe('useDeleteFinancialEntryMutation', () => {
   const mockInvalidateQueries = vi.fn();
-  // Cast para acessar o mock da função delete
-  const mockDelete = api.financial[':id'].$delete as unknown as ReturnType<typeof vi.fn>;
+  // Criamos o mock da função $delete isoladamente para poder verificar chamadas
+  const mockDelete = vi.fn();
 
   beforeEach(() => {
     vi.clearAllMocks();
+
+    // Configura o mock do useQueryClient
     (useQueryClient as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
       invalidateQueries: mockInvalidateQueries,
+    });
+
+    // 4. Configura o retorno do useAuthenticatedApi
+    (useAuthenticatedApi as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
+      api: {
+        financial: {
+          ':id': {
+            $delete: mockDelete,
+          },
+        },
+      },
     });
   });
 
   it('deve chamar a API corretamente e invalidar o cache em caso de sucesso', async () => {
-    // Configura o mock para retornar sucesso
+    // Configura o retorno de sucesso na função mockada
     mockDelete.mockResolvedValue({
       ok: true,
       json: async () => ({ success: true }),
@@ -65,7 +69,7 @@ describe('useDeleteFinancialEntryMutation', () => {
   });
 
   it('deve lançar um erro se a resposta da API não for ok', async () => {
-    // Configura o mock para simular erro
+    // Configura o retorno de erro na função mockada
     mockDelete.mockResolvedValue({
       ok: false,
     });

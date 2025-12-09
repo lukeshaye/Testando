@@ -1,23 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { renderHook, waitFor } from '@testing-library/react';
+import { renderHook } from '@testing-library/react';
 import { useUpdateFinancialEntryMutation } from './useUpdateFinancialEntryMutation';
-import { api } from '@/packages/web/src/lib/api';
+// 1. Substituição do import da API estática pelo hook autenticado
+import { useAuthenticatedApi } from '@/hooks/useAuthenticatedApi';
 import { useQueryClient } from '@tanstack/react-query';
 
-// 1. Mock do módulo de API (Hono RPC)
-// Precisamos simular a estrutura aninhada api.financial[':id'].$put
-vi.mock('@/packages/web/src/lib/api', () => ({
-  api: {
-    financial: {
-      ':id': {
-        $put: vi.fn(),
-      },
-    },
-  },
-}));
+// 2. Mock do hook de autenticação
+vi.mock('@/hooks/useAuthenticatedApi');
 
-// 2. Mock do React Query
-// Zombamos o useQueryClient para verificar a invalidação de cache
+// Mock do React Query (mantido igual)
 vi.mock('@tanstack/react-query', async (importOriginal) => {
   const actual = await importOriginal();
   return {
@@ -29,12 +20,26 @@ vi.mock('@tanstack/react-query', async (importOriginal) => {
 
 describe('useUpdateFinancialEntryMutation', () => {
   const mockInvalidateQueries = vi.fn();
-  const mockPut = api.financial[':id'].$put as unknown as ReturnType<typeof vi.fn>;
+  // Criamos o mock da função $put explicitamente aqui
+  const mockPut = vi.fn();
 
   beforeEach(() => {
     vi.clearAllMocks();
+
+    // Configuração do useQueryClient
     (useQueryClient as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
       invalidateQueries: mockInvalidateQueries,
+    });
+
+    // 3. Configuração do retorno do useAuthenticatedApi com a estrutura correta
+    (useAuthenticatedApi as unknown as ReturnType<typeof vi.fn>).mockReturnValue({
+      api: {
+        financial: {
+          ':id': {
+            $put: mockPut,
+          },
+        },
+      },
     });
   });
 
