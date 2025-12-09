@@ -1,20 +1,13 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook, waitFor } from '@testing-library/react';
 import { useTodayAppointmentsQuery } from './useTodayAppointmentsQuery';
-import { api } from '@/packages/web/src/lib/api';
+// 1. Troca da importação estática pelo hook autenticado
+import { useAuthenticatedApi } from '@/hooks/useAuthenticatedApi';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ReactNode } from 'react';
 
-// Mock do cliente API com estrutura completa
-vi.mock('@/packages/web/src/lib/api', () => ({
-  api: {
-    dashboard: {
-      stats: { $get: vi.fn() },
-      chart: { $get: vi.fn() },
-    },
-    appointments: { $get: vi.fn() },
-  },
-}));
+// 2. Mock do novo hook
+vi.mock('@/hooks/useAuthenticatedApi');
 
 // Wrapper para o React Query
 const createWrapper = () => {
@@ -32,12 +25,24 @@ const createWrapper = () => {
 
 describe('useTodayAppointmentsQuery', () => {
   const mockDate = new Date('2023-10-25T10:00:00.000Z');
+  // Criamos uma função mock para interceptar as chamadas do método $get
+  const mockGet = vi.fn();
 
   beforeEach(() => {
     vi.clearAllMocks();
+    
     // Congela o tempo para garantir que o new Date().toISOString() seja previsível
     vi.useFakeTimers();
     vi.setSystemTime(mockDate);
+
+    // 3. Configuração do mock do useAuthenticatedApi para retornar a estrutura correta
+    (useAuthenticatedApi as any).mockReturnValue({
+      api: {
+        appointments: {
+          $get: mockGet,
+        },
+      },
+    });
   });
 
   afterEach(() => {
@@ -50,8 +55,8 @@ describe('useTodayAppointmentsQuery', () => {
       { id: '2', clientName: 'Bob', status: 'PENDING', time: '11:00' },
     ];
 
-    // Mock da resposta de sucesso
-    (api.appointments.$get as any).mockResolvedValue({
+    // Configura o retorno da função mockada ($get)
+    mockGet.mockResolvedValue({
       ok: true,
       json: async () => mockAppointments,
     });
@@ -69,8 +74,8 @@ describe('useTodayAppointmentsQuery', () => {
     // Verifica os dados
     expect(result.current.data).toEqual(mockAppointments);
 
-    // Verifica se a API foi chamada com a data correta (ISO string do mockDate)
-    expect(api.appointments.$get).toHaveBeenCalledWith({
+    // Verifica se a função mockada foi chamada com a data correta
+    expect(mockGet).toHaveBeenCalledWith({
       query: {
         date: mockDate.toISOString(),
       },
@@ -78,8 +83,8 @@ describe('useTodayAppointmentsQuery', () => {
   });
 
   it('deve lançar erro ao falhar na busca', async () => {
-    // Mock da resposta de erro
-    (api.appointments.$get as any).mockResolvedValue({
+    // Configura o retorno de erro
+    mockGet.mockResolvedValue({
       ok: false,
     });
 

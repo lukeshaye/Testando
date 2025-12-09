@@ -1,20 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, waitFor } from '@testing-library/react';
 import { useDashboardKPIsQuery } from './useDashboardKPIsQuery';
-import { api } from '@/packages/web/src/lib/api';
+// 1. Substituição da importação da API pelo hook autenticado
+import { useAuthenticatedApi } from '@/hooks/useAuthenticatedApi';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ReactNode } from 'react';
 
-// Mock do cliente API com estrutura completa conforme Módulo 5.1
-vi.mock('@/packages/web/src/lib/api', () => ({
-  api: {
-    dashboard: {
-      stats: { $get: vi.fn() },
-      chart: { $get: vi.fn() },
-    },
-    appointments: { $get: vi.fn() },
-  },
-}));
+// 2. Mock do hook de autenticação
+vi.mock('@/hooks/useAuthenticatedApi');
 
 // Wrapper para o React Query
 const createWrapper = () => {
@@ -31,8 +24,22 @@ const createWrapper = () => {
 };
 
 describe('useDashboardKPIsQuery', () => {
+  // Criamos o mock da função específica que será chamada
+  const mockGetStats = vi.fn();
+
   beforeEach(() => {
     vi.clearAllMocks();
+
+    // 3. Configuração do mock para retornar a estrutura da API
+    (useAuthenticatedApi as any).mockReturnValue({
+      api: {
+        dashboard: {
+          stats: {
+            $get: mockGetStats,
+          },
+        },
+      },
+    });
   });
 
   it('deve retornar os dados de KPI com sucesso', async () => {
@@ -42,8 +49,8 @@ describe('useDashboardKPIsQuery', () => {
       averageTicket: 200,
     };
 
-    // Mock da resposta de sucesso
-    (api.dashboard.stats.$get as any).mockResolvedValue({
+    // Mock da resposta de sucesso usando a função mockada
+    mockGetStats.mockResolvedValue({
       ok: true,
       json: async () => mockData,
     });
@@ -58,14 +65,14 @@ describe('useDashboardKPIsQuery', () => {
     // Aguarda o sucesso
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
-    // Verifica os dados
+    // Verifica os dados e se a função foi chamada
     expect(result.current.data).toEqual(mockData);
-    expect(api.dashboard.stats.$get).toHaveBeenCalledTimes(1);
+    expect(mockGetStats).toHaveBeenCalledTimes(1);
   });
 
   it('deve lançar um erro quando a requisição falhar', async () => {
     // Mock da resposta de erro
-    (api.dashboard.stats.$get as any).mockResolvedValue({
+    mockGetStats.mockResolvedValue({
       ok: false,
     });
 

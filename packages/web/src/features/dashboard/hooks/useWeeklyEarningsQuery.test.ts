@@ -1,20 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, waitFor } from '@testing-library/react';
 import { useWeeklyEarningsQuery } from './useWeeklyEarningsQuery';
-import { api } from '@/packages/web/src/lib/api';
+import { useAuthenticatedApi } from '@/hooks/useAuthenticatedApi'; // 1. Nova importação
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ReactNode } from 'react';
 
-// Mock do cliente API com estrutura completa
-vi.mock('@/packages/web/src/lib/api', () => ({
-  api: {
-    dashboard: {
-      stats: { $get: vi.fn() },
-      chart: { $get: vi.fn() },
-    },
-    appointments: { $get: vi.fn() },
-  },
-}));
+// 2. Mock do hook de autenticação
+vi.mock('@/hooks/useAuthenticatedApi');
 
 // Wrapper para o React Query
 const createWrapper = () => {
@@ -31,8 +23,21 @@ const createWrapper = () => {
 };
 
 describe('useWeeklyEarningsQuery', () => {
+  // Criamos uma função mockada para controlar o método específico que o hook chama
+  const mockGet = vi.fn();
+
   beforeEach(() => {
     vi.clearAllMocks();
+
+    // 3. Configuramos o retorno do useAuthenticatedApi para corresponder à estrutura
+    // que o useWeeklyEarningsQuery espera (api.dashboard.chart.$get)
+    (useAuthenticatedApi as any).mockReturnValue({
+      api: {
+        dashboard: {
+          chart: { $get: mockGet },
+        },
+      },
+    });
   });
 
   it('deve retornar os dados do gráfico com sucesso', async () => {
@@ -41,8 +46,8 @@ describe('useWeeklyEarningsQuery', () => {
       { date: '2023-10-02', amount: 750 },
     ];
 
-    // Mock da resposta de sucesso
-    (api.dashboard.chart.$get as any).mockResolvedValue({
+    // Mock da resposta de sucesso usando nossa função local
+    mockGet.mockResolvedValue({
       ok: true,
       json: async () => mockChartData,
     });
@@ -59,12 +64,12 @@ describe('useWeeklyEarningsQuery', () => {
 
     // Verifica os dados
     expect(result.current.data).toEqual(mockChartData);
-    expect(api.dashboard.chart.$get).toHaveBeenCalledTimes(1);
+    expect(mockGet).toHaveBeenCalledTimes(1);
   });
 
   it('deve lançar erro ao falhar na busca', async () => {
     // Mock da resposta de erro
-    (api.dashboard.chart.$get as any).mockResolvedValue({
+    mockGet.mockResolvedValue({
       ok: false,
     });
 
