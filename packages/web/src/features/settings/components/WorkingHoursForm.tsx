@@ -5,7 +5,7 @@ import { useForm, useFieldArray } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Clock, Plus, Trash2, Save, AlertTriangle, Loader2 } from 'lucide-react';
-import dayjs from 'dayjs'; // CORREÇÃO C: Substituição de moment por dayjs (Padrão do Projeto)
+import dayjs from 'dayjs';
 
 // Imports de UI (shadcn/ui)
 import {
@@ -48,9 +48,7 @@ import {
   useDeleteBusinessExceptionMutation,
 } from '../hooks/useUpdateSettingsMutation';
 
-// CORREÇÃO B (DRY - Princípio 2.2): 
-// Importação dos schemas canônicos em vez de redefinição manual.
-// Assumindo que este arquivo existe com base no prompt.
+[cite_start]// Importação dos schemas canônicos (Atualizados no Passo 2 para camelCase) [cite: 14]
 import { BusinessHoursSchema, BusinessExceptionSchema } from '../schemas/settings.schema'; 
 
 // --- CONSTANTS & ADAPTERS ---
@@ -62,8 +60,6 @@ const DAYS_OF_WEEK = [
 ];
 
 // Adaptação para o Form: O formulário espera um objeto wrapper { hours: [...] }
-// O BusinessHoursSchema valida a entidade individual (ou a lista, dependendo da implementação do backend).
-// Aqui compomos o schema do formulário reutilizando a regra canônica.
 const formWorkingHoursSchema = z.object({
   hours: z.array(BusinessHoursSchema)
 });
@@ -71,21 +67,22 @@ const formWorkingHoursSchema = z.object({
 type WorkingHoursFormData = z.infer<typeof formWorkingHoursSchema>;
 type BusinessExceptionFormData = z.infer<typeof BusinessExceptionSchema>;
 
+// Interface local atualizada para camelCase (Reflete o retorno da API do Passo 3)
 interface BusinessException {
   id: number;
   description: string;
-  exception_date: string; // YYYY-MM-DD
-  start_time: string | null;
-  end_time: string | null;
+  exceptionDate: string; // YYYY-MM-DD (camelCase)
+  startTime: string | null; // camelCase
+  endTime: string | null;   // camelCase
 }
 
-// Inicialização com todos os dias inativos
+// Inicialização com todos os dias inativos (camelCase)
 const DEFAULT_HOURS: WorkingHoursFormData = {
   hours: DAYS_OF_WEEK.map(day => ({
-    day_of_week: day.value,
-    is_active: false,
-    start_time: null,
-    end_time: null,
+    dayOfWeek: day.value,
+    isActive: false,
+    startTime: null,
+    endTime: null,
   })),
 };
 
@@ -108,7 +105,7 @@ export const WorkingHoursForm = () => {
 
   // 3. Formulário de Horários
   const hoursForm = useForm<WorkingHoursFormData>({
-    resolver: zodResolver(formWorkingHoursSchema), // Usa o schema composto com a fonte de verdade
+    resolver: zodResolver(formWorkingHoursSchema),
     defaultValues: DEFAULT_HOURS,
   });
 
@@ -117,26 +114,28 @@ export const WorkingHoursForm = () => {
 
   // 4. Formulário de Exceções
   const exceptionForm = useForm<BusinessExceptionFormData>({
-    resolver: zodResolver(BusinessExceptionSchema), // Usa diretamente o schema canônico
+    resolver: zodResolver(BusinessExceptionSchema),
     defaultValues: {
       description: '',
-      // CORREÇÃO C: Uso de dayjs
-      exception_date: dayjs().startOf('day').toDate(),
-      start_time: '09:00',
-      end_time: '18:00',
+      exceptionDate: dayjs().startOf('day').toDate(), // camelCase
+      startTime: '09:00', // camelCase
+      endTime: '18:00',   // camelCase
     },
   });
 
   // --- Sincronização de Dados ---
+  // Princípio 2.1 (Mapeamento): Assume que 'data' já vem da API em camelCase
   useEffect(() => {
     if (data?.businessHours) {
       const hoursData = DEFAULT_HOURS.hours.map(defaultHour => {
-        const existing = data.businessHours.find((h: any) => h.day_of_week === defaultHour.day_of_week);
+        // Busca usando camelCase
+        const existing = data.businessHours.find((h: any) => h.dayOfWeek === defaultHour.dayOfWeek);
         return {
-          day_of_week: defaultHour.day_of_week,
-          is_active: !!(existing?.start_time && existing?.end_time),
-          start_time: existing?.start_time || null,
-          end_time: existing?.end_time || null,
+          dayOfWeek: defaultHour.dayOfWeek,
+          // Lógica de negócio: Se tem horário definido, está ativo
+          isActive: !!(existing?.startTime && existing?.endTime),
+          startTime: existing?.startTime || null,
+          endTime: existing?.endTime || null,
         };
       });
       resetHoursForm({ hours: hoursData });
@@ -151,10 +150,12 @@ export const WorkingHoursForm = () => {
     }
 
     fields.forEach((field, index) => {
-      if (watch(`hours.${index}.is_active`)) {
-        setValue(`hours.${index}.start_time`, startTime, { shouldValidate: true });
-        setValue(`hours.${index}.end_time`, endTime, { shouldValidate: true });
-        update(index, { ...field, start_time: startTime, end_time: endTime });
+      // Verifica camelCase isActive
+      if (watch(`hours.${index}.isActive`)) {
+        // Atualiza camelCase startTime/endTime
+        setValue(`hours.${index}.startTime`, startTime, { shouldValidate: true });
+        setValue(`hours.${index}.endTime`, endTime, { shouldValidate: true });
+        update(index, { ...field, startTime: startTime, endTime: endTime });
       }
     });
     toast.info('Horários aplicados aos dias ativos.');
@@ -162,10 +163,12 @@ export const WorkingHoursForm = () => {
 
   // --- Handlers de Horários (Update Hours) ---
   const onSubmitHours = (formData: WorkingHoursFormData) => {
+    // Preparação para envio. O Drizzle no backend (Passo 1/3) fará o map reverso para snake_case se necessário,
+    // mas a API deve receber camelCase conforme contrato.
     const hoursToUpsert = formData.hours.map(h => ({
-        day_of_week: h.day_of_week,
-        start_time: h.is_active ? h.start_time : null,
-        end_time: h.is_active ? h.end_time : null,
+        dayOfWeek: h.dayOfWeek,
+        startTime: h.isActive ? h.startTime : null,
+        endTime: h.isActive ? h.endTime : null,
     }));
     updateHours(hoursToUpsert as any);
   };
@@ -174,10 +177,10 @@ export const WorkingHoursForm = () => {
   const onSubmitException = (formData: BusinessExceptionFormData) => {
     const exceptionData = {
       description: formData.description,
-      // CORREÇÃO C: Uso de dayjs para formatar
-      exception_date: dayjs(formData.exception_date).format('YYYY-MM-DD'),
-      start_time: formData.start_time || null,
-      end_time: formData.end_time || null,
+      // camelCase para a API
+      exceptionDate: dayjs(formData.exceptionDate).format('YYYY-MM-DD'),
+      startTime: formData.startTime || null,
+      endTime: formData.endTime || null,
     };
 
     addException(exceptionData as any, {
@@ -185,10 +188,9 @@ export const WorkingHoursForm = () => {
         setIsExceptionModalOpen(false);
         exceptionForm.reset({
           description: '',
-          // CORREÇÃO C: Uso de dayjs
-          exception_date: dayjs().startOf('day').toDate(),
-          start_time: '09:00',
-          end_time: '18:00',
+          exceptionDate: dayjs().startOf('day').toDate(),
+          startTime: '09:00',
+          endTime: '18:00',
         });
       },
     });
@@ -271,10 +273,10 @@ export const WorkingHoursForm = () => {
                   <div key={field.id} className="p-4 rounded-lg border border-border bg-background">
                     <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 items-center">
                       
-                      {/* Checkbox para Ativar o Dia */}
+                      {/* Checkbox para Ativar o Dia (isActive) */}
                       <FormField
                         control={hoursForm.control}
-                        name={`hours.${index}.is_active`}
+                        name={`hours.${index}.isActive`}
                         render={({ field: checkboxField }) => (
                           <FormItem className="flex flex-row items-center space-x-3 space-y-0 col-span-2 lg:col-span-1">
                             <FormControl>
@@ -282,24 +284,24 @@ export const WorkingHoursForm = () => {
                                 checked={checkboxField.value}
                                 onCheckedChange={(checked) => {
                                     if (!checked) {
-                                        setValue(`hours.${index}.start_time`, null);
-                                        setValue(`hours.${index}.end_time`, null);
+                                        setValue(`hours.${index}.startTime`, null);
+                                        setValue(`hours.${index}.endTime`, null);
                                     }
                                     checkboxField.onChange(checked);
                                 }}
                               />
                             </FormControl>
                             <FormLabel className="font-semibold text-foreground cursor-pointer">
-                              {DAYS_OF_WEEK.find(d => d.value === field.day_of_week)?.label}
+                              {DAYS_OF_WEEK.find(d => d.value === field.dayOfWeek)?.label}
                             </FormLabel>
                           </FormItem>
                         )}
                       />
 
-                      {/* Input de Hora Início */}
+                      {/* Input de Hora Início (startTime) */}
                       <FormField
                         control={hoursForm.control}
-                        name={`hours.${index}.start_time`}
+                        name={`hours.${index}.startTime`}
                         render={({ field: timeField }) => (
                           <FormItem className="col-span-2 lg:col-span-1">
                             <FormControl>
@@ -307,7 +309,7 @@ export const WorkingHoursForm = () => {
                                 type="time" 
                                 {...timeField} 
                                 value={timeField.value || ''}
-                                disabled={!watch(`hours.${index}.is_active`)}
+                                disabled={!watch(`hours.${index}.isActive`)}
                                 placeholder="Início" 
                               />
                             </FormControl>
@@ -316,10 +318,10 @@ export const WorkingHoursForm = () => {
                         )}
                       />
 
-                      {/* Input de Hora Fim */}
+                      {/* Input de Hora Fim (endTime) */}
                       <FormField
                         control={hoursForm.control}
-                        name={`hours.${index}.end_time`}
+                        name={`hours.${index}.endTime`}
                         render={({ field: timeField }) => (
                           <FormItem className="col-span-2 lg:col-span-1">
                             <FormControl>
@@ -327,7 +329,7 @@ export const WorkingHoursForm = () => {
                                 type="time" 
                                 {...timeField} 
                                 value={timeField.value || ''}
-                                disabled={!watch(`hours.${index}.is_active`)}
+                                disabled={!watch(`hours.${index}.isActive`)}
                                 placeholder="Fim" 
                               />
                             </FormControl>
@@ -389,14 +391,14 @@ export const WorkingHoursForm = () => {
                             )}
                         />
 
+                        {/* Campo Atualizado para camelCase: exceptionDate */}
                         <FormField
                             control={exceptionForm.control}
-                            name="exception_date"
+                            name="exceptionDate"
                             render={({ field }) => (
                                 <FormItem>
                                     <FormLabel>Data *</FormLabel>
                                     <FormControl>
-                                        {/* CORREÇÃO C: Input Date com dayjs */}
                                         <Input 
                                             type="date" 
                                             value={field.value ? dayjs(field.value).format('YYYY-MM-DD') : ''}
@@ -409,9 +411,10 @@ export const WorkingHoursForm = () => {
                         />
 
                         <div className="grid grid-cols-2 gap-4">
+                            {/* Campo Atualizado para camelCase: startTime */}
                             <FormField
                                 control={exceptionForm.control}
-                                name="start_time"
+                                name="startTime"
                                 render={({ field }) => (
                                     <FormItem>
                                         <FormLabel>Início (opcional)</FormLabel>
@@ -423,9 +426,10 @@ export const WorkingHoursForm = () => {
                                     </FormItem>
                                 )}
                             />
+                            {/* Campo Atualizado para camelCase: endTime */}
                             <FormField
                                 control={exceptionForm.control}
-                                name="end_time"
+                                name="endTime"
                                 render={({ field }) => (
                                     <FormItem>
                                         <FormLabel>Fim (opcional)</FormLabel>
@@ -466,11 +470,12 @@ export const WorkingHoursForm = () => {
                   <div>
                     <p className="font-semibold text-foreground">{exception.description}</p>
                     <div className="text-sm text-muted-foreground mt-1 flex items-center space-x-2">
-                        {/* CORREÇÃO C: Formatação com dayjs */}
-                        <span>{dayjs(exception.exception_date).format('DD/MM/YYYY')}</span>
+                        {/* Uso de camelCase: exceptionDate */}
+                        <span>{dayjs(exception.exceptionDate).format('DD/MM/YYYY')}</span>
                         <span className="text-xs text-primary">•</span>
-                        {exception.start_time && exception.end_time ? (
-                            <span>{exception.start_time} - {exception.end_time}</span>
+                        {/* Uso de camelCase: startTime e endTime */}
+                        {exception.startTime && exception.endTime ? (
+                            <span>{exception.startTime} - {exception.endTime}</span>
                         ) : (
                             <span className="italic">Fechado o dia todo</span>
                         )}

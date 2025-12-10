@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { FinancialDataTable } from './FinancialDataTable';
 import { useFinancialEntriesQuery } from '../hooks/useFinancialEntriesQuery';
@@ -10,7 +10,7 @@ vi.mock('../hooks/useFinancialEntriesQuery');
 vi.mock('../hooks/useDeleteFinancialEntryMutation');
 
 // Mock dos componentes de UI complexos para focar na lógica da tabela
-// (Opcional, mas ajuda a evitar ruído de bibliotecas externas nos testes unitários)
+// Princípio 2.3 (KISS) e 2.5 (SoC): Isolamos a tabela de suas dependências visuais complexas para testar apenas a lógica.
 vi.mock('@/components/ConfirmationModal', () => ({
   ConfirmationModal: ({ isOpen, title, onConfirm }: any) => (
     isOpen ? (
@@ -31,30 +31,33 @@ vi.mock('./FinancialFormModal', () => ({
 describe('FinancialDataTable', () => {
   const mockDelete = vi.fn();
 
+  // ATENÇÃO: Refatorado para camelCase conforme o "Padrão Ouro".
+  // Isso reflete a atualização do Passo 2 (Shared Types) e garante que o
+  // componente receba os dados no formato que espera (Passo 4).
   const mockEntries: FinancialEntry[] = [
     {
       id: 1,
-      user_id: 1,
+      userId: 1,                    // Atualizado: user_id -> userId
       description: 'Consultoria Tech',
       amount: '5000.00',
       type: 'receita',
-      entry_date: '2023-10-01T00:00:00Z',
-      entry_type: 'mensal',
+      entryDate: '2023-10-01T00:00:00Z', // Atualizado: entry_date -> entryDate
+      entryType: 'mensal',          // Atualizado: entry_type -> entryType
       category: 'Serviços',
-      created_at: '2023-10-01',
-      updated_at: '2023-10-01'
+      createdAt: '2023-10-01',      // Atualizado: created_at -> createdAt
+      updatedAt: '2023-10-01'       // Atualizado: updated_at -> updatedAt
     },
     {
       id: 2,
-      user_id: 1,
+      userId: 1,                    // Atualizado: user_id -> userId
       description: 'Hospedagem AWS',
       amount: '200.50',
       type: 'despesa',
-      entry_date: '2023-10-05T00:00:00Z',
-      entry_type: 'mensal',
+      entryDate: '2023-10-05T00:00:00Z', // Atualizado: entry_date -> entryDate
+      entryType: 'mensal',          // Atualizado: entry_type -> entryType
       category: 'Infraestrutura',
-      created_at: '2023-10-05',
-      updated_at: '2023-10-05'
+      createdAt: '2023-10-05',      // Atualizado: created_at -> createdAt
+      updatedAt: '2023-10-05'       // Atualizado: updated_at -> updatedAt
     },
   ];
 
@@ -77,9 +80,6 @@ describe('FinancialDataTable', () => {
 
     const { container } = render(<FinancialDataTable />);
     
-    // Verifica a presença de elementos com a classe skeleton (ou estrutura simulada)
-    // Como estamos usando shadcn/ui skeleton, geralmente eles renderizam divs com classes de animação
-    // Aqui verificamos se o componente não quebrou e se renderizou a estrutura básica de loading
     expect(container.getElementsByClassName('animate-pulse').length).toBeGreaterThan(0);
   });
 
@@ -116,13 +116,13 @@ describe('FinancialDataTable', () => {
 
     render(<FinancialDataTable />);
 
+    // Teste de integridade visual dos dados
     expect(screen.getByText('Consultoria Tech')).toBeInTheDocument();
     expect(screen.getByText('Hospedagem AWS')).toBeInTheDocument();
     expect(screen.getByText('Receita')).toBeInTheDocument();
     expect(screen.getByText('Despesa')).toBeInTheDocument();
     
-    // Verificando formatação de moeda (aproximada, dependendo do locale do ambiente de teste)
-    // O ideal é verificar se contém parte do valor
+    // Verificando formatação de moeda
     expect(screen.getByText((content) => content.includes('5.000,00') || content.includes('5000,00'))).toBeInTheDocument();
   });
 
@@ -170,7 +170,6 @@ describe('FinancialDataTable', () => {
       isError: false,
     });
 
-    // Mock implementation para simular sucesso do delete e chamar o onSuccess se necessário
     mockDelete.mockImplementation((id, { onSuccess }) => {
         onSuccess();
     });
@@ -208,7 +207,5 @@ describe('FinancialDataTable', () => {
     fireEvent.click(editButton);
 
     expect(screen.getByTestId('financial-form-modal')).toBeInTheDocument();
-    // Nota: Testar se o formulário foi preenchido corretamente seria responsabilidade do teste do FinancialFormModal
-    // ou de um teste de integração mais amplo. Aqui garantimos que o estado de "aberto" foi acionado.
   });
 });

@@ -36,15 +36,15 @@ import { useUpdateProductMutation } from '../hooks/useUpdateProductMutation'
 
 /**
  * Interface para os dados do formulário.
- * Usa `null` para campos numéricos para permitir que os inputs fiquem vazios,
- * conforme a lógica legada migrada de Products.tsx.
+ * Refatorado para CamelCase (imageUrl) para alinhar com o "Padrão Ouro".
+ * Usa `null` para campos numéricos para permitir inputs vazios na UI.
  */
 interface ProductFormData {
   name: string
   description?: string | null
-  price: number | null // Permite `null` para o campo de formulário
-  quantity?: number | null // Permite `null` para o campo de formulário
-  image_url?: string | null
+  price: number | null
+  quantity?: number | null
+  imageUrl?: string | null // Atualizado de image_url para imageUrl
 }
 
 /**
@@ -55,7 +55,7 @@ const defaultFormValues: ProductFormData = {
   description: '',
   price: null,
   quantity: null,
-  image_url: '',
+  imageUrl: '', // Atualizado
 }
 
 /**
@@ -69,8 +69,7 @@ interface ProductFormModalProps {
 
 /**
  * Componente de modal para Adicionar ou Editar um Produto.
- * Responsável pela UI do formulário, validação (Zod) e
- * delegação da lógica de API para os hooks de mutação (SoC 2.5).
+ * Passo 4 do Plano: Atualização para consumir e enviar dados em CamelCase.
  */
 export function ProductFormModal({
   isOpen,
@@ -84,27 +83,24 @@ export function ProductFormModal({
 
   // --- Lógica de Formulário (useForm) ---
   const form = useForm<ProductFormData>({
-    // Validação: "Mantenha zodResolver(CreateProductSchema)" (Plano 3.2.1)
-    // Usamos `as any` conforme a implementação legada para permitir
-    // que o formulário (ProductFormData) use `null` para campos numéricos
-    // que o schema final (CreateProductSchema) espera como `number`.
+    // O Schema Zod (CreateProductSchema) já deve estar em camelCase (Passo 2 do plano).
+    // Usamos `as any` para compatibilizar os nulos do formulário com o schema estrito.
     resolver: zodResolver(CreateProductSchema as any),
     defaultValues: defaultFormValues,
   })
 
   // --- Efeito para popular o formulário ---
-  // "useEffect: Implemente para dar reset() no formulário quando editingProduct mudar" (Plano 3.2.1)
   useEffect(() => {
     if (isOpen) {
       if (editingProduct) {
-        // Modo Edição: Popula o formulário com dados do produto
+        // Modo Edição: Popula o formulário com dados do produto (CamelCase vindo da API)
         form.reset({
           name: editingProduct.name,
           description: editingProduct.description || '',
-          // Lógica legada: Converte centavos para R$ para o input
+          // Lógica de negócio: Converte centavos para R$ para visualização
           price: editingProduct.price / 100,
           quantity: editingProduct.quantity || 0,
-          image_url: editingProduct.image_url || '',
+          imageUrl: editingProduct.imageUrl || '', // Atualizado: Assume que a API já retorna camelCase
         })
       } else {
         // Modo Criação: Reseta para os valores padrão
@@ -117,13 +113,14 @@ export function ProductFormModal({
    * Handler de submissão do formulário.
    */
   const onSubmit = async (formData: ProductFormData) => {
-    // "Tratamento de Dados: Mantenha a lógica de conversão de price (R$ para centavos)" (Plano 3.2.1)
+    // Prepara o objeto para envio (CamelCase para a API)
+    // Mantém lógica de conversão de tipos (R$ -> centavos, nulls)
     const dataForApi = {
-      ...formData,
+      name: formData.name,
+      description: formData.description || null,
       price: Math.round(Number(formData.price) * 100), // Converte R$ para centavos
       quantity: Number(formData.quantity) || 0,
-      description: formData.description || null,
-      image_url: formData.image_url || null,
+      imageUrl: formData.imageUrl || null, // Atualizado
     }
 
     try {
@@ -132,22 +129,19 @@ export function ProductFormModal({
         await updateMutation.mutateAsync({
           ...dataForApi,
           id: editingProduct.id,
-        } as ProductType) // Força o tipo esperado pela mutação
+        } as ProductType)
       } else {
         // Modo Criação
         await addMutation.mutateAsync(
           dataForApi as z.infer<typeof CreateProductSchema>,
         )
       }
-      onClose() // Fecha o modal em caso de sucesso
+      onClose()
     } catch (error) {
-      // O hook de mutação (useAdd/useUpdate) é responsável por
-      // exibir o feedback de erro (toast), conforme Plano 3.1.2
       console.error('Falha ao salvar produto:', error)
     }
   }
 
-  // Handler para controlar o estado de abertura/fechamento do Dialog
   const handleOpenChange = (open: boolean) => {
     if (!open) {
       onClose()
@@ -197,7 +191,7 @@ export function ProductFormModal({
                     <Textarea
                       placeholder="Descreva o produto..."
                       {...field}
-                      value={field.value || ''} // Garante que o campo não seja `null`
+                      value={field.value || ''}
                     />
                   </FormControl>
                   <FormMessage />
@@ -219,9 +213,8 @@ export function ProductFormModal({
                         placeholder="45.50"
                         step="0.01"
                         {...field}
-                        value={field.value ?? ''} // Permite input vazio
+                        value={field.value ?? ''}
                         onChange={(e) =>
-                          // Converte string vazia para `null`
                           field.onChange(
                             e.target.value === ''
                               ? null
@@ -246,9 +239,8 @@ export function ProductFormModal({
                         placeholder="20"
                         step="1"
                         {...field}
-                        value={field.value ?? ''} // Permite input vazio
+                        value={field.value ?? ''}
                         onChange={(e) =>
-                          // Converte string vazia para `null`
                           field.onChange(
                             e.target.value === ''
                               ? null
@@ -263,10 +255,10 @@ export function ProductFormModal({
               />
             </div>
 
-            {/* Campo: URL da Imagem */}
+            {/* Campo: URL da Imagem (Refatorado para imageUrl) */}
             <FormField
               control={form.control}
-              name="image_url"
+              name="imageUrl"
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>URL da Imagem</FormLabel>
@@ -274,7 +266,7 @@ export function ProductFormModal({
                     <Input
                       placeholder="https://exemplo.com/imagem.jpg"
                       {...field}
-                      value={field.value || ''} // Garante que o campo não seja `null`
+                      value={field.value || ''}
                     />
                   </FormControl>
                   <FormMessage />
@@ -292,7 +284,6 @@ export function ProductFormModal({
                 Cancelar
               </Button>
               <Button type="submit" disabled={isPending}>
-                {/* "Estado de Loading: O botão 'Salvar' deve exibir um spinner" (Plano 3.2.1) */}
                 {isPending && (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 )}

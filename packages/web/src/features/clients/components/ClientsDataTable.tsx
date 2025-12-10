@@ -15,8 +15,8 @@ import {
   getSortedRowModel,
   useReactTable,
   SortingState,
-  ColumnFiltersState,
-  GlobalFilterTableState,
+  // ColumnFiltersState, // Não estava sendo usado explicitamente, mas mantido se necessário no futuro
+  // GlobalFilterTableState,
 } from '@tanstack/react-table';
 
 import {
@@ -37,7 +37,6 @@ import {
 } from '@/packages/web/src/components/ui/dropdown-menu';
 import { Button } from '@/packages/web/src/components/ui/button';
 import { Input } from '@/packages/web/src/components/ui/input';
-// Assumindo que ConfirmationModal exista em ui/ConfirmationModal
 import { ConfirmationModal } from '@/packages/web/src/components/ui/ConfirmationModal';
 import {
   Loader2,
@@ -56,8 +55,9 @@ import { differenceInYears } from 'date-fns';
  * Princípios:
  * - CDA (2.17): Implementa o DataTable de shadcn/ui.
  * - PGEC (2.13): Consome o hook useClientsQuery para estado do servidor.
- * - SoC (2.5): Gerencia a apresentação da lista e o estado da UI
- * (filtros, modais), delegando a lógica de dados aos hooks.
+ * - SoC (2.5): Gerencia a apresentação da lista e o estado da UI,
+ * delegando a lógica de dados aos hooks.
+ * - Padronização: Adota camelCase para alinhar com o "Padrão Ouro" (Passo 4).
  */
 export function ClientsDataTable() {
   // 1. Estado do Servidor (PGEC 2.13)
@@ -74,7 +74,7 @@ export function ClientsDataTable() {
   const [clientToDelete, setClientToDelete] =
     useState<ClientType | null>(null);
 
-  // 3. Lógica de Ações (Plano 3.2.7 - 3.2.9)
+  // 3. Lógica de Ações
   const handleNewClient = () => {
     setClientToEdit(null);
     setIsFormModalOpen(true);
@@ -101,7 +101,7 @@ export function ClientsDataTable() {
     }
   };
 
-  // 4. Definição das Colunas (Plano 3.2.3)
+  // 4. Definição das Colunas (Refatorado para camelCase)
   const columns: ColumnDef<ClientType>[] = [
     {
       accessorKey: 'name',
@@ -121,12 +121,20 @@ export function ClientsDataTable() {
       header: 'Email',
     },
     {
-      accessorKey: 'birth_date',
+      // MUDANÇA CRÍTICA: 'birth_date' (snake_case) -> 'birthDate' (camelCase)
+      // Isso alinha com o novo Schema do Passo 2 e o retorno da API do Passo 3.
+      accessorKey: 'birthDate',
       header: 'Idade',
       cell: ({ row }) => {
-        const birthDate = row.getValue('birth_date') as string | Date | null;
+        // Acesso atualizado para camelCase
+        const birthDate = row.getValue('birthDate') as string | Date | null;
+        
         if (!birthDate) return <span className="text-muted-foreground">N/A</span>;
-        const age = differenceInYears(new Date(), new Date(birthDate));
+        
+        const dateObj = new Date(birthDate);
+        if (isNaN(dateObj.getTime())) return <span className="text-muted-foreground">Inválido</span>;
+
+        const age = differenceInYears(new Date(), dateObj);
         return <span>{age} anos</span>;
       },
     },
@@ -194,7 +202,7 @@ export function ClientsDataTable() {
     getPaginationRowModel: getPaginationRowModel(),
   });
 
-  // 6. UI de Filtro e Header (Plano 3.2.4)
+  // 6. UI de Filtro e Header
   const tableHeader = (
     <div className="flex items-center justify-between gap-4 py-4">
       <div className="relative flex-1">
@@ -213,7 +221,7 @@ export function ClientsDataTable() {
     </div>
   );
 
-  // 7. Renderização Condicional (Loading, Empty, Data) (Plano 3.2.11)
+  // 7. Renderização Condicional
   if (isLoading) {
     return (
       <div className="flex items-center justify-center rounded-lg border border-dashed p-12">
@@ -312,19 +320,14 @@ export function ClientsDataTable() {
         </Button>
       </div>
 
-      {/* 8. Modais (Plano 3.2.10) */}
+      {/* 8. Modais */}
       <ClientFormModal
         isOpen={isFormModalOpen}
         onClose={() => setIsFormModalOpen(false)}
         editingClient={clientToEdit}
-        // CORREÇÃO: A assinatura da prop foi corrigida para aceitar o
-        // argumento 'client', conforme definido no contrato do ClientFormModal
-        // (Plano 3.1.7) e exigido pela análise do Veredito.
+        // O tipo 'ClientType' aqui já deve estar atualizado (Passo 2)
+        // para esperar chaves camelCase internamente.
         onClientCreated={(client: ClientType) => {
-          // O hook de mutação já invalida o cache (Plano 3.2.10).
-          // O contrato (Plano 3.1.7) exige a prop, então a implementamos
-          // corretamente (aceitando o argumento 'client'),
-          // mesmo que não precisemos usá-lo aqui (Plano 4.9).
           console.log('Novo cliente criado:', client.id);
         }}
       />

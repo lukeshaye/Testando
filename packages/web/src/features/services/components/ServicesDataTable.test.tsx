@@ -65,9 +65,6 @@ describe('ServicesDataTable', () => {
     
     // Verifica se não renderiza o botão de novo serviço (que só aparece quando carregado)
     expect(screen.queryByText('Novo Serviço')).not.toBeInTheDocument();
-    // Verifica se renderiza elementos com classe de skeleton (verificação estrutural básica)
-    // Como o componente retorna um bloco específico para loading, verificamos se ele está presente
-    // A div pai do loading tem a classe "space-y-4 p-8"
     expect(container.querySelector('.space-y-4.p-8')).toBeInTheDocument();
   });
 
@@ -95,35 +92,35 @@ describe('ServicesDataTable', () => {
 
     expect(screen.getByText('Nenhum serviço encontrado')).toBeInTheDocument();
     expect(screen.getByText('Comece adicionando serviços ao seu catálogo ou ajuste os filtros.')).toBeInTheDocument();
-    // Verifica se o botão de adicionar serviço dentro da tabela vazia existe
-    expect(screen.getAllByText('Adicionar Serviço')[0]).toBeInTheDocument(); // Pode haver outro no header dependendo da implementação
+    expect(screen.getAllByText('Adicionar Serviço')[0]).toBeInTheDocument(); 
   });
 
   it('deve renderizar a lista de serviços corretamente', () => {
+    // ATUALIZAÇÃO PADRÃO OURO: Propriedades em camelCase para alinhar com o contrato da API
     const mockData = [
       {
         id: 1,
-        user_id: 'user-1',
+        userId: 'user-1', // user_id -> userId
         name: 'Corte Masculino',
         description: 'Corte com tesoura',
-        price: 5000, // R$ 50,00
+        price: 5000, 
         duration: 30,
         color: '#000000',
-        image_url: null,
-        created_at: '2023-01-01',
-        updated_at: '2023-01-01',
+        imageUrl: null, // image_url -> imageUrl
+        createdAt: '2023-01-01', // created_at -> createdAt
+        updatedAt: '2023-01-01', // updated_at -> updatedAt
       },
       {
         id: 2,
-        user_id: 'user-1',
+        userId: 'user-1', // user_id -> userId
         name: 'Barba',
         description: null,
-        price: 3500, // R$ 35,00
+        price: 3500, 
         duration: 20,
         color: '#FF0000',
-        image_url: 'http://example.com/img.jpg',
-        created_at: '2023-01-01',
-        updated_at: '2023-01-01',
+        imageUrl: 'http://example.com/img.jpg', // image_url -> imageUrl
+        createdAt: '2023-01-01', // created_at -> createdAt
+        updatedAt: '2023-01-01', // updated_at -> updatedAt
       },
     ];
 
@@ -151,7 +148,6 @@ describe('ServicesDataTable', () => {
     expect(screen.getByText('Barba')).toBeInTheDocument();
     expect(screen.getByText('R$ 35,00')).toBeInTheDocument();
     expect(screen.getByText('20 min')).toBeInTheDocument();
-    // Verifica se a imagem renderizou (pela prop alt)
     expect(screen.getByAltText('Barba')).toBeInTheDocument();
   });
 
@@ -164,7 +160,6 @@ describe('ServicesDataTable', () => {
 
     render(<ServicesDataTable />);
 
-    // O botão está no header
     const newServiceBtn = screen.getByRole('button', { name: /novo serviço/i });
     fireEvent.click(newServiceBtn);
 
@@ -175,14 +170,15 @@ describe('ServicesDataTable', () => {
   });
 
   it('deve abrir o modal de edição ao clicar em "Editar" no menu de ações', async () => {
+    // ATUALIZAÇÃO PADRÃO OURO: Mock em camelCase
     const mockService = {
       id: 10,
-      user_id: '123',
+      userId: '123', // user_id -> userId
       name: 'Serviço Teste',
       price: 1000,
       duration: 15,
-      created_at: '',
-      updated_at: ''
+      createdAt: '', // created_at -> createdAt
+      updatedAt: ''  // updated_at -> updatedAt
     };
 
     mockUseServicesQuery.mockReturnValue({
@@ -193,11 +189,9 @@ describe('ServicesDataTable', () => {
 
     render(<ServicesDataTable />);
 
-    // Abre o dropdown de ações
     const actionsTrigger = screen.getByRole('button', { name: /abrir menu/i });
     fireEvent.click(actionsTrigger);
 
-    // Clica em Editar
     const editButton = await screen.findByText('Editar');
     fireEvent.click(editButton);
 
@@ -208,14 +202,15 @@ describe('ServicesDataTable', () => {
   });
 
   it('deve chamar a mutação de exclusão ao confirmar no dialog', async () => {
+    // ATUALIZAÇÃO PADRÃO OURO: Mock em camelCase
     const mockService = {
       id: 99,
-      user_id: '123',
+      userId: '123', // user_id -> userId
       name: 'Serviço Para Deletar',
       price: 1000,
       duration: 15,
-      created_at: '',
-      updated_at: ''
+      createdAt: '', // created_at -> createdAt
+      updatedAt: ''  // updated_at -> updatedAt
     };
 
     mockUseServicesQuery.mockReturnValue({
@@ -238,11 +233,7 @@ describe('ServicesDataTable', () => {
     expect(screen.getByText('Excluir Serviço')).toBeInTheDocument();
     expect(screen.getByText(/Tem certeza que deseja excluir o serviço/)).toBeInTheDocument();
 
-    // 4. Clica em Confirmar (Botão "Excluir" do Dialog)
-    // Nota: Existem dois botões "Excluir" agora (um do menu que fechou, um do dialog).
-    // O do dialog geralmente é o último ou buscamos por role dentro do dialog,
-    // mas como o menu fecha, deve sobrar o do dialog visível ou podemos buscar pelo container do portal.
-    // Vamos buscar pelo texto exato dentro do footer do dialog.
+    // 4. Clica em Confirmar
     const confirmButton = screen.getByRole('button', { name: 'Excluir' });
     fireEvent.click(confirmButton);
 

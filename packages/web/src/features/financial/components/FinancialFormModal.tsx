@@ -7,7 +7,7 @@ import { z } from "zod";
 import { CreateFinancialEntrySchema } from "@/packages/shared-types";
 import type { FinancialEntry, CreateFinancialEntry } from "@/packages/shared-types";
 
-// IMPORTS DE MUTATION (Ajuste o caminho conforme sua estrutura de pastas, ex: ../api/mutations)
+// IMPORTS DE MUTATION
 import { useAddFinancialEntryMutation } from "../hooks/useAddFinancialEntryMutation";
 import { useUpdateFinancialEntryMutation } from "../hooks/useUpdateFinancialEntryMutation";
 
@@ -43,7 +43,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-// Schema local estendido para lidar com a coerção de string para número no input
+// Schema local estendido. Assumindo que CreateFinancialEntrySchema já foi 
+// atualizado para camelCase no Passo 2 (Shared Types).
 const FormSchema = CreateFinancialEntrySchema.extend({
   amount: z.coerce.number().positive("O valor deve ser positivo"),
 });
@@ -53,7 +54,7 @@ type FormData = z.infer<typeof FormSchema>;
 interface FinancialFormModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  editingEntry?: FinancialEntry | null; // Renomeado de initialData para consistência
+  editingEntry?: FinancialEntry | null;
 }
 
 export function FinancialFormModal({
@@ -65,7 +66,6 @@ export function FinancialFormModal({
   const addMutation = useAddFinancialEntryMutation();
   const updateMutation = useUpdateFinancialEntryMutation();
 
-  // Estado de loading combinado
   const isSubmitting = addMutation.isPending || updateMutation.isPending;
 
   const form = useForm<FormData>({
@@ -74,8 +74,10 @@ export function FinancialFormModal({
       description: "",
       amount: 0,
       type: "receita",
-      entry_type: "pontual",
-      entry_date: new Date(),
+      // PADRÃO OURO: snake_case (entry_type) alterado para camelCase (entryType)
+      entryType: "pontual",
+      // PADRÃO OURO: snake_case (entry_date) alterado para camelCase (entryDate)
+      entryDate: new Date(),
     },
   });
 
@@ -85,19 +87,20 @@ export function FinancialFormModal({
       if (editingEntry) {
         form.reset({
           description: editingEntry.description,
-          // Converte centavos para reais para edição no input (1234 -> 12.34)
+          // Converte centavos para reais para edição no input
           amount: editingEntry.amount / 100,
           type: editingEntry.type,
-          entry_type: editingEntry.entry_type,
-          entry_date: new Date(editingEntry.entry_date),
+          // Mapeamento direto em camelCase
+          entryType: editingEntry.entryType,
+          entryDate: new Date(editingEntry.entryDate),
         });
       } else {
         form.reset({
           description: "",
           amount: 0,
           type: "receita",
-          entry_type: "pontual",
-          entry_date: new Date(),
+          entryType: "pontual",
+          entryDate: new Date(),
         });
       }
     }
@@ -105,28 +108,24 @@ export function FinancialFormModal({
 
   const handleSubmit = async (values: FormData) => {
     try {
-      // Converter o valor de volta para centavos antes de enviar (ex: 12.34 -> 1234)
+      // Converter o valor de volta para centavos antes de enviar
+      // O restante dos campos já está em camelCase e pronto para o Drizzle
       const payload: CreateFinancialEntry = {
         ...values,
         amount: Math.round(values.amount * 100),
       };
 
       if (editingEntry) {
-        // Fluxo de Edição
         await updateMutation.mutateAsync({ 
           id: editingEntry.id, 
           data: payload 
         });
       } else {
-        // Fluxo de Criação
         await addMutation.mutateAsync(payload);
       }
 
-      // Fecha o modal apenas em caso de sucesso
       onOpenChange(false);
     } catch (error) {
-      // O tratamento de erro (ex: toasts) geralmente é feito no onError global do QueryClient
-      // ou no hook da mutação, mas pode ser adicionado log aqui se necessário.
       console.error("Erro ao salvar lançamento:", error);
     }
   };
@@ -205,10 +204,10 @@ export function FinancialFormModal({
                 )}
               />
 
-              {/* Campo: Frequência (Pontual/Fixa) */}
+              {/* Campo: Frequência - ATUALIZADO PARA entryType (camelCase) */}
               <FormField
                 control={form.control}
-                name="entry_type"
+                name="entryType"
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Frequência</FormLabel>
@@ -233,10 +232,10 @@ export function FinancialFormModal({
               />
             </div>
 
-            {/* Campo: Data */}
+            {/* Campo: Data - ATUALIZADO PARA entryDate (camelCase) */}
             <FormField
               control={form.control}
-              name="entry_date"
+              name="entryDate"
               render={({ field }) => (
                 <FormItem className="flex flex-col">
                   <FormLabel>Data do Lançamento</FormLabel>
@@ -260,8 +259,6 @@ export function FinancialFormModal({
                       </FormControl>
                     </PopoverTrigger>
                     <PopoverContent className="w-auto p-0" align="start">
-                      {/* Note: O Calendar ainda pode precisar de locale se não estiver configurado globalmente, 
-                          mas mantivemos a remoção do import 'ptBR' conforme instrução estrita para remover dependências diretas. */}
                       <Calendar
                         mode="single"
                         selected={field.value}

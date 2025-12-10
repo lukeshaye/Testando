@@ -7,6 +7,7 @@
  * - PTE (2.15): Teste de Ponta a Ponta (isolado). A lógica da UI é testada
  * "mockando" os hooks de dados (DIP 2.9), permitindo testar a
  * renderização, filtros e orquestração de modais de forma independente.
+ * - Padronização: Dados mockados ajustados para camelCase conforme Padrão Ouro.
  */
 
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
@@ -59,6 +60,7 @@ import { ConfirmationModal } from '@/packages/web/src/components/ConfirmationMod
 
 // --- Setup dos Testes ---
 
+// ATUALIZAÇÃO PADRÃO OURO: Propriedades agora em camelCase para refletir o schema atualizado
 const mockProducts: ProductType[] = [
   {
     id: 1,
@@ -66,8 +68,8 @@ const mockProducts: ProductType[] = [
     price: 5000,
     quantity: 10,
     description: '',
-    image_url: '',
-    user_id: '1',
+    imageUrl: '', // De 'image_url' para 'imageUrl'
+    userId: '1',  // De 'user_id' para 'userId'
   },
   {
     id: 2,
@@ -75,8 +77,8 @@ const mockProducts: ProductType[] = [
     price: 5500,
     quantity: 3, // Estoque baixo
     description: '',
-    image_url: '',
-    user_id: '1',
+    imageUrl: '', // De 'image_url' para 'imageUrl'
+    userId: '1',  // De 'user_id' para 'userId'
   },
 ];
 

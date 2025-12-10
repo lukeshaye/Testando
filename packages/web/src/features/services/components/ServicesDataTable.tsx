@@ -68,15 +68,16 @@ export function ServicesDataTable() {
   // 3. Definição das Colunas
   const columns: ColumnDef<ServiceType>[] = [
     {
-      accessorKey: 'name',
+      accessorKey: 'name', // Simples, mantém-se igual em camel/snake
       header: 'Nome',
       cell: ({ row }) => {
         const service = row.original;
+        // REFATORADO: image_url -> imageUrl (camelCase)
         return (
           <div className="flex items-center gap-3">
-             {service.image_url ? (
+             {service.imageUrl ? (
                 <img 
-                  src={service.image_url} 
+                  src={service.imageUrl} 
                   alt={service.name} 
                   className="h-10 w-10 rounded-md object-cover bg-muted"
                 />

@@ -1,35 +1,23 @@
 /**
  * ARQUIVO: /packages/web/src/features/products/components/ProductsDataTable.tsx
  *
- * Este componente implementa a TAREFA 4.10, Seção 3.2.2 do $$PLANO_DE_FEATURE$$.
- *
- * CORREÇÃO (Baseada na Rejeição):
- * Esta versão corrige a violação da Seção 3.2.2, Lógica 2.
- * 1. REMOVIDO: O estado `columnFilters` e a lógica `onColumnFiltersChange` que não estavam no plano.
- * 2. ADICIONADO: O estado `const [searchTerm, setSearchTerm] = useState('');`, conforme explicitamente exigido pelo plano (PGEC Nível 1).
- * 3. ATUALIZADO: A `useReactTable` agora usa `globalFilter: searchTerm` e `onGlobalFilterChange: setSearchTerm`.
- * 4. ATUALIZADO: O `Input` do header agora está corretamente vinculado ao estado `searchTerm`.
- *
- * PRINCÍPIOS APLICADOS:
- * - SoC (2.5): Componente focado em orquestração e UI.
- * - PGEC (2.13): Usa Nível 1 (useState para `searchTerm` e modais) e Nível 3 (useQuery).
- * - CDA (2.17): Uso mandatório de shadcn/ui (DataTable, DropdownMenu, Button, Input).
+ * Tabela de gerenciamento de produtos.
+ * Implementa a camada de UI seguindo o "Padrão Ouro" (camelCase) e os 17 Princípios.
  */
 
-import { useState } from 'react'; // <--- CORREÇÃO: Importa useState
+import { useState } from 'react';
 import {
   ColumnDef,
   SortingState,
-  // REMOVIDO: ColumnFiltersState (Não estava no plano)
   getCoreRowModel,
   getPaginationRowModel,
   getSortedRowModel,
-  getFilteredRowModel, // Necessário para globalFilter
+  getFilteredRowModel,
   useReactTable,
 } from '@tanstack/react-table';
 import { MoreHorizontal, Plus } from 'lucide-react';
 
-// --- Componentes Shadcn/ui (CDA 2.17) ---
+// --- Componentes Shadcn/ui (Princípio 2.17 - CDA) ---
 import { Button } from '@/packages/web/src/components/ui/button';
 import { Input } from '@/packages/web/src/components/ui/input';
 import {
@@ -42,40 +30,37 @@ import {
 } from '@/packages/web/src/components/ui/dropdown-menu';
 import { DataTable } from '@/packages/web/src/components/ui/data-table';
 
-// --- Componentes da Feature e Globais ---
+// --- Componentes da Feature e Globais (Princípio 2.11 - Feature-Based) ---
 import { ProductFormModal } from './ProductFormModal';
 import { ConfirmationModal } from '@/packages/web/src/components/ConfirmationModal';
-import { LoadingSpinner } from '@/packages/web/src/components/LoadingSpinner'; // Assumindo caminho
+import { LoadingSpinner } from '@/packages/web/src/components/LoadingSpinner';
 
-// --- Hooks de Dados (PGEC 2.13 / CQRS 2.12) ---
+// --- Hooks de Dados (Princípio 2.12 - CQRS / 2.9 - DIP) ---
 import { useProductsQuery } from '../hooks/useProductsQuery';
 import { useDeleteProductMutation } from '../hooks/useDeleteProductMutation';
 
-// --- Tipos Compartilhados (DSpP 2.16) ---
+// --- Tipos Compartilhados (Princípio 2.2 - DRY / Contrato do Passo 2) ---
 import { ProductType } from '@/packages/shared-types';
 
 // --- Utilitários ---
 import { formatCurrency } from '@/packages/web/src/lib/utils';
 
 export function ProductsDataTable() {
-  // --- Estado Nível 1 (Local State - PGEC 2.13, Plano 3.2.2 Lógica 2) ---
+  // --- Estado Nível 1: Local State (Princípio 2.13 - PGEC) ---
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<ProductType | null>(null);
   const [productToDelete, setProductToDelete] = useState<ProductType | null>(null);
-  // --- CORREÇÃO: Adiciona o estado searchTerm exigido pelo plano ---
-  const [searchTerm, setSearchTerm] = useState('');
+  const [searchTerm, setSearchTerm] = useState(''); // Estado para filtro global
 
-  // --- Estado da Tabela (Local) ---
+  // --- Estado da Tabela ---
   const [sorting, setSorting] = useState<SortingState>([]);
-  // REMOVIDO: columnFilters (Não estava no plano)
 
-  // --- Hooks de Dados (Nível 3 - Server State, Plano 3.2.2 Lógica 3) ---
+  // --- Estado Nível 3: Server State (Princípio 2.13 - PGEC) ---
   const { data: products, isLoading, isError } = useProductsQuery();
-  const { mutate: deleteProduct, isPending: isDeleting } =
-    useDeleteProductMutation();
+  const { mutate: deleteProduct, isPending: isDeleting } = useDeleteProductMutation();
 
-  // --- Handlers de UI ---
+  // --- Handlers de UI (Princípio 2.5 - SoC) ---
   const handleOpenNewModal = () => {
     setEditingProduct(null);
     setIsModalOpen(true);
@@ -91,10 +76,9 @@ export function ProductsDataTable() {
     setIsDeleteConfirmOpen(true);
   };
 
-  // (Plano 3.2.2 Lógica 6)
   const handleConfirmDelete = () => {
-    if (productToDelete) {
-      deleteProduct(productToDelete.id!, {
+    if (productToDelete && productToDelete.id) {
+      deleteProduct(productToDelete.id, { // Uso estrito de camelCase 'id'
         onSuccess: () => {
           setIsDeleteConfirmOpen(false);
           setProductToDelete(null);
@@ -103,26 +87,26 @@ export function ProductsDataTable() {
     }
   };
 
-  // --- Definição de Colunas (Plano 3.2.2 Lógica 5) ---
+  // --- Definição de Colunas (Passo 4: CamelCase Strict) ---
   const columns: ColumnDef<ProductType>[] = [
     {
-      accessorKey: 'name',
+      accessorKey: 'name', // Mapeia para 'name' (camelCase) do ProductType
       header: 'Nome',
       cell: ({ row }) => (
         <div className="font-medium">{row.original.name}</div>
       ),
     },
     {
-      accessorKey: 'price',
+      accessorKey: 'price', // Mapeia para 'price' (camelCase)
       header: 'Preço',
       cell: ({ row }) => formatCurrency(row.original.price),
     },
     {
-      accessorKey: 'quantity',
+      accessorKey: 'quantity', // Mapeia para 'quantity' (camelCase)
       header: 'Quantidade',
       cell: ({ row }) => {
         const quantity = row.original.quantity ?? 0;
-        const isLowStock = quantity <= 5; // Lógica legada mantida
+        const isLowStock = quantity <= 5;
         return (
           <span
             className={
@@ -176,12 +160,11 @@ export function ProductsDataTable() {
     getPaginationRowModel: getPaginationRowModel(),
     onSortingChange: setSorting,
     getSortedRowModel: getSortedRowModel(),
-    getFilteredRowModel: getFilteredRowModel(), // Necessário para filtro
-    // --- CORREÇÃO: Implementa globalFilter com o estado searchTerm ---
+    getFilteredRowModel: getFilteredRowModel(),
     onGlobalFilterChange: setSearchTerm,
     state: {
       sorting,
-      globalFilter: searchTerm, // Vincula o estado local ao filtro da tabela
+      globalFilter: searchTerm,
     },
   });
 
@@ -205,12 +188,11 @@ export function ProductsDataTable() {
     );
   }
 
-  // --- Renderização Principal ---
+  // --- Renderização Principal (Princípio 2.17 - CDA) ---
   return (
     <div className="w-full space-y-4">
-      {/* Header (Plano 3.2.2 Lógica 4) */}
+      {/* Header com Filtro Global */}
       <div className="flex items-center justify-between">
-        {/* --- CORREÇÃO: Input vinculado ao estado `searchTerm` --- */}
         <Input
           placeholder="Filtrar produtos..."
           value={searchTerm}
@@ -223,7 +205,7 @@ export function ProductsDataTable() {
         </Button>
       </div>
 
-      {/* Tabela (Plano 3.2.2 Lógica 5) */}
+      {/* Tabela de Dados */}
       <div className="rounded-md border bg-card">
         <DataTable table={table} columns={columns} />
       </div>
@@ -248,7 +230,7 @@ export function ProductsDataTable() {
         </Button>
       </div>
 
-      {/* Modais (Plano 3.2.2 Lógica 7) */}
+      {/* Modais de Ação */}
       <ProductFormModal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}

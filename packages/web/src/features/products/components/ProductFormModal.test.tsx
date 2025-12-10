@@ -2,11 +2,10 @@
  * ARQUIVO: /packages/web/src/features/products/components/ProductFormModal.test.tsx
  *
  * Este arquivo implementa a TAREFA 4.10, Seção 3.3 (Testes) do $$PLANO_DE_FEATURE$$.
+ * ATUALIZADO: Refatoração para camelCase (Padrão Ouro - Passo 4).
  *
  * PRINCÍPIOS APLICADOS:
- * - PTE (2.15): Teste de Ponta a Ponta (isolado). A UI do formulário é testada
- * "mockando" os hooks de mutação (DIP 2.9), permitindo verificar a lógica
- * de validação (DSpP 2.16) e a correta chamada das mutações (CQRS 2.12).
+ * - PTE (2.15): Teste de Ponta a Ponta atualizado para refletir o novo contrato de dados (camelCase).
  */
 
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
@@ -29,14 +28,15 @@ import { useUpdateProductMutation } from '../hooks/useUpdateProductMutation';
 const mockAddMutate = vi.fn(() => Promise.resolve());
 const mockUpdateMutate = vi.fn(() => Promise.resolve());
 
+// ATUALIZADO: Propriedades renomeadas para camelCase conforme Passo 2 do plano.
 const mockEditingProduct: ProductType = {
   id: 1,
   name: 'Shampoo Antigo',
   price: 1500, // R$ 15,00
   quantity: 10,
   description: 'Descrição antiga',
-  image_url: 'http://imagem.antiga/img.png',
-  user_id: 'user-123',
+  imageUrl: 'http://imagem.antiga/img.png', // camelCase (era image_url)
+  userId: 'user-123', // camelCase (era user_id)
 };
 
 // Props padrão para o modal
@@ -74,7 +74,7 @@ describe('ProductFormModal (Feature Test)', () => {
     expect(screen.getByPlaceholderText('45.50')).toHaveValue(null);
   });
 
-  // Teste de Submissão (Modo "Novo") (Plano 3.3 Lógica 2)
+  // Teste de Submissão (Modo "Novo")
   it('should call useAddProductMutation on submit in "new" mode', async () => {
     render(<ProductFormModal {...defaultProps} />);
 
@@ -96,13 +96,14 @@ describe('ProductFormModal (Feature Test)', () => {
     await waitFor(() => {
       // Verifica se a mutação de ADIÇÃO foi chamada
       expect(mockAddMutate).toHaveBeenCalledTimes(1);
-      // Verifica se os dados foram formatados corretamente (R$ para centavos)
+      
+      // ATUALIZADO: Expectativa agora aguarda camelCase no payload
       expect(mockAddMutate).toHaveBeenCalledWith({
         name: 'Novo Shampoo',
         price: 5050, // 50.50 * 100
         quantity: 100,
         description: null,
-        image_url: null,
+        imageUrl: null, // camelCase
       });
 
       // Verifica se a mutação de UPDATE não foi chamada
@@ -112,7 +113,7 @@ describe('ProductFormModal (Feature Test)', () => {
     });
   });
 
-  // Teste de Renderização (Modo "Editar") (Plano 3.3 Lógica 2)
+  // Teste de Renderização (Modo "Editar")
   it('should render in "edit" mode and populate fields (useEffect)', async () => {
     render(
       <ProductFormModal {...defaultProps} editingProduct={mockEditingProduct} />,
@@ -120,21 +121,21 @@ describe('ProductFormModal (Feature Test)', () => {
 
     expect(screen.getByText('Editar Produto')).toBeInTheDocument();
 
-    // Espera o useEffect popular os campos (Plano 3.2.1 Lógica 4)
+    // Espera o useEffect popular os campos
     expect(
       await screen.findByDisplayValue('Shampoo Antigo'),
     ).toBeInTheDocument();
     expect(
       await screen.findByDisplayValue('Descrição antiga'),
     ).toBeInTheDocument();
-    expect(await screen.findByDisplayValue('15.00')).toBeInTheDocument(); // 1500 centavos -> 15.00 R$
+    expect(await screen.findByDisplayValue('15.00')).toBeInTheDocument(); 
     expect(await screen.findByDisplayValue('10')).toBeInTheDocument();
     expect(
       await screen.findByDisplayValue('http://imagem.antiga/img.png'),
     ).toBeInTheDocument();
   });
 
-  // Teste de Submissão (Modo "Editar") (Plano 3.3 Lógica 2)
+  // Teste de Submissão (Modo "Editar")
   it('should call useUpdateProductMutation on submit in "edit" mode', async () => {
     render(
       <ProductFormModal {...defaultProps} editingProduct={mockEditingProduct} />,
@@ -155,13 +156,15 @@ describe('ProductFormModal (Feature Test)', () => {
     await waitFor(() => {
       // Verifica se a mutação de ATUALIZAÇÃO foi chamada
       expect(mockUpdateMutate).toHaveBeenCalledTimes(1);
+      
+      // ATUALIZADO: Expectativa agora aguarda camelCase no payload
       expect(mockUpdateMutate).toHaveBeenCalledWith({
-        id: 1, // ID do produto editado
-        name: 'Shampoo Atualizado', // Nome modificado
-        price: 1500, // Preço (não modificado, mas convertido)
+        id: 1, 
+        name: 'Shampoo Atualizado', 
+        price: 1500, 
         quantity: 10,
         description: 'Descrição antiga',
-        image_url: 'http://imagem.antiga/img.png',
+        imageUrl: 'http://imagem.antiga/img.png', // camelCase
       });
 
       // Verifica se a mutação de ADIÇÃO não foi chamada
@@ -171,7 +174,7 @@ describe('ProductFormModal (Feature Test)', () => {
     });
   });
 
-  // Teste de Validação (Zod) (Plano 3.3 Lógica 2)
+  // Teste de Validação (Zod)
   it('should show validation errors and not submit if required fields are empty', async () => {
     render(<ProductFormModal {...defaultProps} />);
 
@@ -179,7 +182,6 @@ describe('ProductFormModal (Feature Test)', () => {
     fireEvent.click(screen.getByRole('button', { name: /Salvar/i }));
 
     // Espera as mensagens de erro do Zod aparecerem
-    // (O schema exige 'name', 'price' e 'quantity')
     expect(
       await screen.findByText(/Nome é obrigatório/i),
     ).toBeInTheDocument();
@@ -197,7 +199,7 @@ describe('ProductFormModal (Feature Test)', () => {
     expect(defaultProps.onClose).not.toHaveBeenCalled();
   });
 
-  // Teste de Estado de Loading (Plano 3.3 Lógica 2)
+  // Teste de Estado de Loading
   it('should show loading state (isPending) and disable buttons', () => {
     // Configura o mock para estar "Pending"
     vi.mocked(useAddProductMutation).mockReturnValue({
@@ -210,11 +212,9 @@ describe('ProductFormModal (Feature Test)', () => {
     const saveButton = screen.getByRole('button', { name: /Salvando.../i });
     const cancelButton = screen.getByRole('button', { name: /Cancelar/i });
 
-    // Verifica se o texto do botão mudou e se há um spinner (Plano 3.2.1 Lógica 6)
     expect(saveButton).toBeInTheDocument();
     expect(saveButton.querySelector('svg.animate-spin')).toBeInTheDocument();
 
-    // Verifica se os botões estão desabilitados
     expect(saveButton).toBeDisabled();
     expect(cancelButton).toBeDisabled();
   });

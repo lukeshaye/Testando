@@ -1,6 +1,6 @@
 // /packages/web/src/features/settings/components/WorkingHoursForm.test.tsx
 
-import { render, screen, waitFor, within, act } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { WorkingHoursForm } from './WorkingHoursForm';
 import { useSettingsQuery } from '../hooks/useSettingsQuery';
@@ -30,19 +30,20 @@ describe('WorkingHoursForm', () => {
   const mockAddException = jest.fn();
   const mockDeleteException = jest.fn();
 
-  // Dados Mock
+  // Dados Mock - REFATORADO PARA CAMELCASE (Padrão Ouro)
+  // Alinhado com Passo 2: O "Contrato" (Shared Types / Zod)
   const mockSettingsData = {
     businessHours: [
-      { day_of_week: 1, start_time: '09:00', end_time: '18:00' }, // Segunda
-      { day_of_week: 2, start_time: '09:00', end_time: '18:00' }, // Terça
+      { dayOfWeek: 1, startTime: '09:00', endTime: '18:00' }, // Segunda
+      { dayOfWeek: 2, startTime: '09:00', endTime: '18:00' }, // Terça
     ],
     businessExceptions: [
       {
         id: 101,
         description: 'Feriado Nacional',
-        exception_date: '2025-12-25',
-        start_time: null,
-        end_time: null,
+        exceptionDate: '2025-12-25', // exception_date -> exceptionDate
+        startTime: null,
+        endTime: null,
       },
     ],
   };
@@ -105,7 +106,8 @@ describe('WorkingHoursForm', () => {
     
     // Verifica estado inicial
     const rowContainer = mondayCheckbox.closest('div.grid');
-    const timeInputs = within(rowContainer as HTMLElement).getAllByRole('textbox'); // input type=time as vezes é tratado como textbox
+    // input type=time as vezes é tratado como textbox
+    const timeInputs = within(rowContainer as HTMLElement).getAllByRole('textbox'); 
     timeInputs.forEach(input => expect(input).toBeEnabled());
 
     // Ação
@@ -134,7 +136,7 @@ describe('WorkingHoursForm', () => {
     expect(updatedStarts.length).toBeGreaterThan(1);
   });
 
-  // --- 3. Testes de Validação e Erro (Zod / DSpP 2.16) - NOVO ---
+  // --- 3. Testes de Validação e Erro (Zod / DSpP 2.16) ---
 
   it('NÃO deve chamar addException se a descrição for vazia (Validação Obrigatória)', async () => {
     // Este teste valida o DSpP garantindo que o Schema Zod impede a mutação
@@ -152,14 +154,8 @@ describe('WorkingHoursForm', () => {
     // Expectativa: Mutação NÃO é chamada
     expect(mockAddException).not.toHaveBeenCalled();
 
-    // Expectativa: Mensagem de erro deve aparecer (assumindo mensagem do zodResolver)
-    // Nota: O texto exato depende do schema definido, mas procuramos por indicação de erro.
-    // Baseado no prompt: description: z.string().min(1, "Descrição é obrigatória")
     // Aguarda a renderização da mensagem de erro assíncrona do hook-form
     await waitFor(() => {
-        // Procura por mensagens comuns de validação ou o texto específico se conhecido
-        // Como o schema foi importado, assumimos a validação padrão.
-        // Vamos verificar se o mock continua zero.
         expect(mockAddException).toHaveBeenCalledTimes(0);
     });
   });
@@ -174,12 +170,14 @@ describe('WorkingHoursForm', () => {
     await user.click(saveButton);
 
     expect(mockUpdateHours).toHaveBeenCalledTimes(1);
+    
+    // REFATORADO: Espera payload em camelCase
     expect(mockUpdateHours).toHaveBeenCalledWith(
       expect.arrayContaining([
         expect.objectContaining({
-          day_of_week: 1,
-          start_time: '09:00',
-          end_time: '18:00',
+          dayOfWeek: 1,      // era day_of_week
+          startTime: '09:00', // era start_time
+          endTime: '18:00',   // era end_time
         })
       ])
     );
@@ -202,10 +200,12 @@ describe('WorkingHoursForm', () => {
     await user.click(submitButton);
 
     expect(mockAddException).toHaveBeenCalledTimes(1);
+    
+    // REFATORADO: Espera payload em camelCase
     expect(mockAddException).toHaveBeenCalledWith(
       expect.objectContaining({
         description: 'Carnaval',
-        exception_date: '2025-03-03',
+        exceptionDate: '2025-03-03', // era exception_date
       }),
       expect.anything()
     );

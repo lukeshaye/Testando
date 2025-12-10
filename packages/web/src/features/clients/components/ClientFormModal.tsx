@@ -72,12 +72,9 @@ const genderOptions = [
  * Modal de formulário para criar ou editar clientes.
  *
  * Princípios:
- * - CDA (2.17): Utiliza componentes shadcn/ui (Dialog, Form, Input, Select, Calendar)
- * substituindo a implementação legada do PrimeReact.
+ * - CDA (2.17): Utiliza componentes shadcn/ui (Dialog, Form, Input, Select, Calendar).
  * - SoC (2.5): O componente foca na apresentação e validação do formulário.
- * Ele delega a lógica de API (salvar/atualizar) para os hooks de mutação.
- * - DSpP (2.16): Mantém a validação de frontend (Zod + react-hook-form)
- * para feedback imediato ao usuário.
+ * - DSpP (2.16): Mantém a validação de frontend (Zod + react-hook-form) alinhada ao Schema camelCase.
  */
 export function ClientFormModal({
   isOpen,
@@ -91,6 +88,7 @@ export function ClientFormModal({
   const isPending = addMutation.isPending || updateMutation.isPending;
 
   // 2. Configuração do Formulário (DSpP 2.16)
+  // O CreateClientSchema agora deve esperar chaves em camelCase (ex: birthDate)
   const form = useForm<z.infer<typeof CreateClientSchema>>({
     resolver: zodResolver(CreateClientSchema),
     mode: 'onChange',
@@ -100,15 +98,15 @@ export function ClientFormModal({
   useEffect(() => {
     if (isOpen) {
       if (editingClient) {
-        // Modo Edição: Popula o formulário com dados existentes
+        // Modo Edição: Popula o formulário com dados existentes (camelCase)
         form.reset({
           name: editingClient.name,
           phone: editingClient.phone || '',
           email: editingClient.email || '',
           notes: editingClient.notes || '',
-          // Converte string/data para objeto Date que o Calendar do shadcn espera
-          birth_date: editingClient.birth_date
-            ? new Date(editingClient.birth_date)
+          // Alterado de birth_date para birthDate para seguir o Padrão Ouro
+          birthDate: editingClient.birthDate
+            ? new Date(editingClient.birthDate)
             : undefined,
           gender: editingClient.gender || undefined,
         });
@@ -119,7 +117,7 @@ export function ClientFormModal({
           phone: '',
           email: '',
           notes: '',
-          birth_date: undefined,
+          birthDate: undefined, // Alterado de birth_date para birthDate
           gender: undefined,
         });
       }
@@ -232,7 +230,7 @@ export function ClientFormModal({
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <FormField
                 control={form.control}
-                name="birth_date"
+                name="birthDate" // Alterado de birth_date para birthDate
                 render={({ field }) => (
                   <FormItem className="flex flex-col">
                     <FormLabel>Data de Nascimento</FormLabel>

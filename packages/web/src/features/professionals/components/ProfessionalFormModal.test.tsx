@@ -1,17 +1,12 @@
 /*
  * Arquivo de Destino: /packages/web/src/features/professionals/components/ProfessionalFormModal.test.tsx
  *
- * Tarefa: 4. Testes (PTE 2.15)
+ * Tarefa: 4. Testes (PTE 2.15) - Refatorado para Padrão Ouro (camelCase)
  *
  * Princípios:
- * - PTE (2.15): Mocka os hooks de mutação (useAddProfessionalMutation, useUpdateProfessionalMutation)
- * para isolar o componente e testar a delegação de lógica (SoC).
- * - DSpP (2.16): Testa a lógica de validação do formulário (Zod) antes do submit.
- * - Teste Crítico: Verifica a *transformação* de dados entre o formato da UI
- * (ex: R$ 1500,00, 10%) e o formato da API (ex: 150000 centavos, 0.1 decimal)
- * no preenchimento (edit) e no submit (create/edit).
- * - Correção de Bug (Problema 4): Testa a validação do campo de cor.
- * - Correção de Feature (Problema 28): Testa se os campos de horário são submetidos.
+ * - PTE (2.15): Mocka os hooks de mutação.
+ * - DSpP (2.16): Testa a validação do formulário (Zod).
+ * - Padrão Ouro: Propriedades em camelCase (ex: workStartTime) alinhadas ao Schema.
  */
 
 import { render, screen, waitFor } from "@testing-library/react"
@@ -53,20 +48,20 @@ vi.mock("@/components/ui/use-toast", () => ({
   }),
 }))
 
-// --- Dados de Mock ---
+// --- Dados de Mock (Atualizado para camelCase) ---
 
 const mockProfessional: ProfessionalType = {
   id: "prof-1",
-  user_id: "user-abc",
+  userId: "user-abc", // snake_case -> camelCase
   name: "João Silva (Existente)",
   color: "#ff0000",
   salary: 500000, // 5.000,00 BRL (em centavos)
-  commission_rate: 0.1, // 10% (em decimal)
-  created_at: new Date().toISOString(),
-  work_start_time: "08:00",
-  work_end_time: "18:00",
-  lunch_start_time: "12:00",
-  lunch_end_time: "13:00",
+  commissionRate: 0.1, // snake_case -> camelCase
+  createdAt: new Date().toISOString(), // snake_case -> camelCase
+  workStartTime: "08:00", // snake_case -> camelCase
+  workEndTime: "18:00", // snake_case -> camelCase
+  lunchStartTime: "12:00", // snake_case -> camelCase
+  lunchEndTime: "13:00", // snake_case -> camelCase
 }
 
 // --- Setup de Teste ---
@@ -140,15 +135,16 @@ describe("ProfessionalFormModal", () => {
       })
 
       // Verifica a *transformação* de dados (Teste Crítico)
+      // ATUALIZADO: Espera chaves em camelCase
       expect(mockAddMutate).toHaveBeenCalledWith({
         name: "Nova Contratação",
         color: "#a855f7", // Valor padrão
         salary: 350075, // 3500.75 -> 350075 (centavos)
-        commission_rate: 0.2, // 20 -> 0.2 (decimal)
-        work_start_time: "09:00",
-        work_end_time: "18:00",
-        lunch_start_time: null, // Campo não preenchido
-        lunch_end_time: null, // Campo não preenchido
+        commissionRate: 0.2, // 20 -> 0.2 (decimal) | snake_case -> camelCase
+        workStartTime: "09:00", // snake_case -> camelCase
+        workEndTime: "18:00", // snake_case -> camelCase
+        lunchStartTime: null, // snake_case -> camelCase
+        lunchEndTime: null, // snake_case -> camelCase
       })
 
       // Verifica se o modal fechou no sucesso
@@ -175,7 +171,7 @@ describe("ProfessionalFormModal", () => {
       expect(screen.getByLabelText(/Salário Base/i)).toHaveValue(5000)
       // 0.1 (decimal) -> 10 (%)
       expect(screen.getByLabelText(/Comissão/i)).toHaveValue(10)
-      // Campos de horário (Feature 28)
+      // Campos de horário
       expect(screen.getByLabelText(/Início \(Trabalho\)/i)).toHaveValue("08:00")
       expect(screen.getByLabelText(/Fim \(Almoço\)/i)).toHaveValue("13:00")
     })
@@ -206,19 +202,20 @@ describe("ProfessionalFormModal", () => {
       })
 
       // Verifica a *transformação* de dados (Teste Crítico)
+      // ATUALIZADO: Espera chaves em camelCase
       expect(mockUpdateMutate).toHaveBeenCalledWith({
         // Dados do formulário
         name: "João Silva (Atualizado)",
         salary: 510000, // 5100 -> 510000 (centavos)
         // Dados originais mantidos
         id: "prof-1",
-        user_id: "user-abc",
+        userId: "user-abc", // snake_case -> camelCase
         color: "#ff0000", // Não foi alterado
-        commission_rate: 0.1, // Não foi alterado (10%)
-        work_start_time: "08:00",
-        work_end_time: "18:00",
-        lunch_start_time: "12:00",
-        lunch_end_time: "13:00",
+        commissionRate: 0.1, // Não foi alterado (10%) | snake_case -> camelCase
+        workStartTime: "08:00", // snake_case -> camelCase
+        workEndTime: "18:00", // snake_case -> camelCase
+        lunchStartTime: "12:00", // snake_case -> camelCase
+        lunchEndTime: "13:00", // snake_case -> camelCase
       })
 
       expect(onCloseMock).toHaveBeenCalledTimes(1)

@@ -3,7 +3,6 @@
 import { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
 import { Loader2 } from 'lucide-react';
 
 // Imports de UI (shadcn/ui)
@@ -30,21 +29,20 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useSettingsQuery } from '../hooks/useSettingsQuery';
 import { useUpdateProfileSettingsMutation } from '../hooks/useUpdateSettingsMutation';
 
-// Schema de Validação (conforme definido no Plano)
-const profileSettingsSchema = z.object({
-  name: z.string().min(1, "Nome do negócio é obrigatório"),
-  phone: z.string().optional(),
-  address: z.string().optional(),
-});
-
-type ProfileSettingsFormData = z.infer<typeof profileSettingsSchema>;
+// [DRY 2.2] Importação do Contrato (Shared Types)
+// Isso centraliza a lógica de validação. Se a regra mudar no backend, o frontend se adapta automaticamente.
+// Ajuste o caminho de importação conforme a configuração do seu monorepo (ex: @barba/shared-types)
+import { 
+  profileSettingsSchema, 
+  type ProfileSettingsFormData 
+} from '@barba/shared-types/schemas/settings.schema'; 
 
 export const ProfileSettingsForm = () => {
   // 1. Consumir hooks de dados e mutação
   const { data, isLoading } = useSettingsQuery();
   const { mutate, isPending } = useUpdateProfileSettingsMutation();
 
-  // 2. Inicializar useForm
+  // 2. Inicializar useForm com Tipagem Compartilhada
   const form = useForm<ProfileSettingsFormData>({
     resolver: zodResolver(profileSettingsSchema),
     defaultValues: {
@@ -54,16 +52,15 @@ export const ProfileSettingsForm = () => {
     },
   });
 
-  // 3. Sincronizar dados do formulário quando a query retornar
+  // 3. Sincronizar dados (Mapeamento Automático - Padrão Ouro)
+  // [KISS 2.3] Como o Backend agora retorna camelCase (Step 3 do plano),
+  // não precisamos de tradução manual (ex: name: data.business_name).
   useEffect(() => {
     if (data?.profile) {
-      form.reset({
-        name: data.profile.name,
-        phone: data.profile.phone || '',
-        address: data.profile.address || '',
-      });
+      // O reset aceita o objeto direto pois as chaves batem exatamente com o schema
+      form.reset(data.profile);
     }
-  }, [data, form.reset]);
+  }, [data, form]);
 
   // 4. Handler de envio
   const onSubmit = (values: ProfileSettingsFormData) => {
@@ -98,7 +95,7 @@ export const ProfileSettingsForm = () => {
       <CardContent>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            {/* Campo: Nome */}
+            {/* Campo: Nome (camelCase) */}
             <FormField
               control={form.control}
               name="name"
@@ -113,7 +110,7 @@ export const ProfileSettingsForm = () => {
               )}
             />
 
-            {/* Campo: Telefone */}
+            {/* Campo: Telefone (camelCase) */}
             <FormField
               control={form.control}
               name="phone"
@@ -128,7 +125,7 @@ export const ProfileSettingsForm = () => {
               )}
             />
 
-            {/* Campo: Endereço */}
+            {/* Campo: Endereço (camelCase) */}
             <FormField
               control={form.control}
               name="address"

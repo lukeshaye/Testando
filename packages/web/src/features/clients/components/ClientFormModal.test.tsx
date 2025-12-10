@@ -51,18 +51,18 @@ const mockUpdateMutate = vi.fn();
 const mockOnClose = vi.fn();
 const mockOnClientCreated = vi.fn();
 
-// Dados de mock
+// Dados de mock ATUALIZADOS para camelCase (Padrão Ouro - Passo 2 e 4)
 const mockEditingClient: ClientType = {
   id: 'client-1',
   name: 'Cliente Antigo',
   email: 'antigo@email.com',
   phone: '11988887777',
-  birth_date: '1990-05-15T00:00:00.000Z',
+  birthDate: '1990-05-15T00:00:00.000Z', // Refatorado: birth_date -> birthDate
   gender: 'masculino',
   notes: 'Notas antigas',
-  organization_id: 'org-1',
-  created_at: '',
-  updated_at: '',
+  organizationId: 'org-1', // Refatorado: organization_id -> organizationId
+  createdAt: '', // Refatorado: created_at -> createdAt
+  updatedAt: '', // Refatorado: updated_at -> updatedAt
 };
 
 const defaultProps = {
@@ -190,9 +190,7 @@ describe('ClientFormModal', () => {
     await user.click(screen.getByRole('button', { name: /Salvar Cliente/ }));
 
     // 2. Verifica se a mensagem de erro do Zod (para o campo 'name') aparece
-    // (A mensagem exata depende da implementação do CreateClientSchema)
     await waitFor(() => {
-      // Procurando por uma mensagem de erro genérica associada ao campo 'name'
       const nameField = screen.getByLabelText(/Nome/).closest('div.relative');
       const formItem = nameField?.closest('div.space-y-2');
       expect(
@@ -222,7 +220,6 @@ describe('ClientFormModal', () => {
     expect(cancelButton).toBeDisabled();
 
     // 2. Verifica se o ícone de loader (Loader2) está visível
-    // (O Loader2 tem 'animate-spin' que lhe dá role 'status')
     expect(within(saveButton).getByRole('status')).toBeInTheDocument();
   });
 });

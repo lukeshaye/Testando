@@ -4,24 +4,20 @@ import { useState, useEffect, useMemo } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-// REMOVIDO: import moment from 'moment';
-// ADICIONADO: dayjs e seus plugins/locales
 import dayjs from 'dayjs';
 import 'dayjs/locale/pt-br';
 import localizedFormat from 'dayjs/plugin/localizedFormat';
-import startOfDay from 'dayjs/plugin/startOf'; // Necessário para a lógica do calendário
+import startOfDay from 'dayjs/plugin/startOf';
 
 import {
   AppointmentFormSchema,
   AppointmentType,
-  ProfessionalType,
-  ServiceType,
   ClientType,
 } from '@/packages/shared-types';
 import { useToast } from '@/packages/ui/components/ui/use-toast';
 import { cn } from '@/packages/ui/lib/utils';
 
-// UI Components (CDA 2.17: Substituindo PrimeReact)
+// UI Components
 import {
   Dialog,
   DialogContent,
@@ -68,19 +64,15 @@ import {
   Plus,
 } from 'lucide-react';
 
-// Hooks (CQRS 2.12 / PGEC 2.13)
+// Hooks
 import { useAddAppointmentMutation } from '../hooks/useAddAppointmentMutation';
 import { useUpdateAppointmentMutation } from '../hooks/useUpdateAppointmentMutation';
 import { useAvailableTimeSlots } from '../hooks/useAvailableTimeSlots';
 
-// Hooks de outras features (assumindo que existem conforme o plano)
-// Estes imports são fictícios e representam o consumo de hooks de outras features
+// Hooks de outras features
 import { useClientsQuery } from '@/packages/web/src/features/clients/hooks/useClientsQuery';
 import { useProfessionalsQuery } from '@/packages/web/src/features/professionals/hooks/useProfessionalsQuery';
 import { useServicesQuery } from '@/packages/web/src/features/services/hooks/useServicesQuery';
-
-// (Este modal de cliente seria importado de features/clients)
-// import { ClientFormModal } from '@/packages/web/src/features/clients/components/ClientFormModal';
 
 // Configura o Day.js
 dayjs.locale('pt-br');
@@ -97,25 +89,20 @@ interface AppointmentFormModalProps {
   initialDate?: Date;
 }
 
+// 2.1 Planejamento: Default Values atualizados para camelCase
 const defaultFormValues: Partial<AppointmentFormData> = {
-  client_id: undefined,
-  professional_id: undefined,
-  service_id: undefined,
+  clientId: undefined,
+  professionalId: undefined,
+  serviceId: undefined,
   price: 0,
-  appointment_date: new Date(),
-  end_date: new Date(),
+  appointmentDate: new Date(),
+  endDate: new Date(),
   attended: false,
 };
 
 /**
- * Componente de Modal (View) para criar e editar agendamentos.
- *
- * Em conformidade com o plano de feature 4.8, item 3.1 (REVISADO).
- *
- * - SoC (2.5): Foca apenas na UI e estado do formulário.
- * - DSpP (2.16): Usa react-hook-form e Zod.
- * - CDA (2.17): Usa componentes de @/packages/ui, substituindo PrimeReact.
- * - Consome hooks de mutação (1.2, 1.3) e o hook de lógica `useAvailableTimeSlots` (2.1).
+ * Componente de Modal para criar e editar agendamentos.
+ * Refatorado para camelCase seguindo o Passo 4 do Padrão Ouro.
  */
 export function AppointmentFormModal({
   isOpen,
@@ -124,35 +111,33 @@ export function AppointmentFormModal({
   initialDate,
 }: AppointmentFormModalProps) {
   const { toast } = useToast();
+  
+  // 2.16 DSpP: Schema e Resolver
   const form = useForm<AppointmentFormData>({
     resolver: zodResolver(AppointmentFormSchema),
     defaultValues: initialDate
-      ? { ...defaultFormValues, appointment_date: initialDate }
+      ? { ...defaultFormValues, appointmentDate: initialDate }
       : defaultFormValues,
   });
 
-  // --- Estado local para UI (ex: modal de novo cliente) ---
   const [isClientModalOpen, setIsClientModalOpen] = useState(false);
 
-  // --- Hooks de Mutação (CQRS 2.12) ---
+  // Hooks de Mutação
   const addMutation = useAddAppointmentMutation();
   const updateMutation = useUpdateAppointmentMutation();
   const isMutating = addMutation.isPending || updateMutation.isPending;
 
-  // --- Hooks de Query (Consumo de outras features) ---
-  const { data: clients = [], isLoading: isLoadingClients } =
-    useClientsQuery({});
-  const { data: professionals = [], isLoading: isLoadingProfessionals } =
-    useProfessionalsQuery({});
-  const { data: services = [], isLoading: isLoadingServices } =
-    useServicesQuery({});
+  // Hooks de Query
+  const { data: clients = [], isLoading: isLoadingClients } = useClientsQuery({});
+  const { data: professionals = [], isLoading: isLoadingProfessionals } = useProfessionalsQuery({});
+  const { data: services = [], isLoading: isLoadingServices } = useServicesQuery({});
 
-  // --- Observadores do Formulário (Form State) ---
-  const watchedProfessionalId = form.watch('professional_id');
-  const watchedServiceId = form.watch('service_id');
-  const watchedDate = form.watch('appointment_date');
+  // Observadores do Formulário (Atualizado para camelCase)
+  const watchedProfessionalId = form.watch('professionalId');
+  const watchedServiceId = form.watch('serviceId');
+  const watchedDate = form.watch('appointmentDate');
 
-  // --- Seleções Derivadas ---
+  // Seleções Derivadas
   const selectedProfessional = useMemo(
     () => professionals.find((p) => p.id === watchedProfessionalId),
     [professionals, watchedProfessionalId]
@@ -165,7 +150,7 @@ export function AppointmentFormModal({
 
   const serviceDuration = selectedService?.duration || 30;
 
-  // --- Hook de Lógica de Negócios (SoC 2.5) ---
+  // Hook de Lógica de Negócios
   const { availableTimeSlots, isLoading: isLoadingSlots } =
     useAvailableTimeSlots({
       selectedDate: watchedDate,
@@ -177,54 +162,52 @@ export function AppointmentFormModal({
 
   /**
    * Efeito: Reseta o formulário ao abrir o modal
+   * Ajustado para ler propriedades em camelCase do editingAppointment
    */
   useEffect(() => {
     if (isOpen) {
       if (editingAppointment) {
         // Modo Edição: Carrega dados existentes
+        // Assumindo que editingAppointment já vem em camelCase da API (Passo 3)
         form.reset({
-          client_id: editingAppointment.client_id,
-          professional_id: editingAppointment.professional_id,
-          service_id: editingAppointment.service_id,
+          clientId: editingAppointment.clientId,
+          professionalId: editingAppointment.professionalId,
+          serviceId: editingAppointment.serviceId,
           // API armazena em centavos, formulário usa reais
           price: (editingAppointment.price || 0) / 100,
-          appointment_date: new Date(editingAppointment.appointment_date),
-          end_date: new Date(editingAppointment.end_date),
+          appointmentDate: new Date(editingAppointment.appointmentDate),
+          endDate: new Date(editingAppointment.endDate),
           attended: editingAppointment.attended,
         });
       } else {
-        // Modo Criação: Reseta para valores padrão
+        // Modo Criação
         form.reset({
           ...defaultFormValues,
-          appointment_date: initialDate || new Date(),
+          appointmentDate: initialDate || new Date(),
         });
       }
     }
   }, [isOpen, editingAppointment, initialDate, form]);
 
   /**
-   * Efeito: Atualiza o preço e a data de término quando o serviço ou
-   * o horário de início mudam.
+   * Efeito: Atualiza preço e data de término
    */
   useEffect(() => {
     if (selectedService) {
-      // API armazena em centavos, schema Zod espera reais
       form.setValue('price', (selectedService.price || 0) / 100, {
         shouldValidate: true,
       });
 
-      // Atualiza a data de término baseada na duração
-      const newEndDate = dayjs(watchedDate) // Alterado para dayjs
+      const newEndDate = dayjs(watchedDate)
         .add(selectedService.duration, 'minutes')
         .toDate();
-      form.setValue('end_date', newEndDate, { shouldValidate: true });
+      // Atualizado para camelCase: endDate
+      form.setValue('endDate', newEndDate, { shouldValidate: true });
     }
   }, [selectedService, watchedDate, form]);
 
   /**
-   * Efeito: Limpa o horário selecionado se os slots disponíveis
-   * mudarem (ex: trocou de profissional) e o horário antigo
-   * não for mais válido.
+   * Efeito: Validação de Slot
    */
   useEffect(() => {
     if (!isLoadingSlots && availableTimeSlots.length > 0) {
@@ -232,16 +215,13 @@ export function AppointmentFormModal({
         (slot) => slot.value.getTime() === watchedDate.getTime()
       );
       if (!selectedTimeValid) {
-        // O horário atual não é mais válido,
-        // mas não vamos resetar automaticamente para não frustrar o usuário.
-        // O `react-hook-form` com Zod irá invalidar se o slot não for escolhido.
-        // A lógica do TimeSlotPicker (legado) também não resetava.
+        // Lógica de invalidação visual ou tratamento se necessário
       }
     }
   }, [availableTimeSlots, isLoadingSlots, watchedDate]);
 
   /**
-   * Efeito: Fecha o modal no sucesso da mutação
+   * Efeito: Fecha modal no sucesso
    */
   useEffect(() => {
     if (addMutation.isSuccess || updateMutation.isSuccess) {
@@ -249,15 +229,15 @@ export function AppointmentFormModal({
     }
   }, [addMutation.isSuccess, updateMutation.isSuccess, onClose]);
 
-  // --- Manipulador de Envio (DSpP 2.16) ---
+  // --- Manipulador de Envio ---
   function onSubmit(data: AppointmentFormData) {
-    // Converte o preço de reais (formulário) para centavos (API)
-    // (Lógica migrada do `onSubmit` do `Appointments.tsx` legado)
+    // 2.2 DRY: A conversão camelCase -> snake_case deve ser feita pelo Drizzle/API.
+    // Aqui enviamos camelCase conforme o Schema Zod (Passo 2).
+    
     const payload = {
       ...data,
-      price: Math.round(data.price * 100),
-      // Garante que a data de término está correta
-      end_date: dayjs(data.appointment_date) // Alterado para dayjs
+      price: Math.round(data.price * 100), // Conversão para centavos
+      endDate: dayjs(data.appointmentDate) // camelCase
         .add(serviceDuration, 'minutes')
         .toDate(),
     };
@@ -265,7 +245,7 @@ export function AppointmentFormModal({
     if (editingAppointment) {
       updateMutation.mutate({
         ...payload,
-        id: editingAppointment.id, // Adiciona o ID para atualização
+        id: editingAppointment.id,
       });
     } else {
       addMutation.mutate(payload);
@@ -273,10 +253,10 @@ export function AppointmentFormModal({
   }
 
   const handleClientCreated = (newClient: ClientType) => {
-    // (Lógica do modal de cliente, se implementado)
     setIsClientModalOpen(false);
     if (newClient && newClient.id) {
-      form.setValue('client_id', newClient.id, { shouldValidate: true });
+      // Atualizado para camelCase: clientId
+      form.setValue('clientId', newClient.id, { shouldValidate: true });
       toast({
         title: 'Cliente Adicionado',
         description: `${newClient.name} foi selecionado.`,
@@ -302,7 +282,7 @@ export function AppointmentFormModal({
               {/* === Cliente (Combobox) === */}
               <FormField
                 control={form.control}
-                name="client_id"
+                name="clientId" // camelCase
                 render={({ field }) => (
                   <FormItem className="flex flex-col">
                     <FormLabel>Cliente *</FormLabel>
@@ -337,7 +317,8 @@ export function AppointmentFormModal({
                                     value={client.name}
                                     key={client.id}
                                     onSelect={() => {
-                                      form.setValue('client_id', client.id);
+                                      // camelCase
+                                      form.setValue('clientId', client.id);
                                     }}
                                   >
                                     <Check
@@ -373,7 +354,7 @@ export function AppointmentFormModal({
               {/* === Profissional (Combobox) === */}
               <FormField
                 control={form.control}
-                name="professional_id"
+                name="professionalId" // camelCase
                 render={({ field }) => (
                   <FormItem className="flex flex-col">
                     <FormLabel>Profissional *</FormLabel>
@@ -407,10 +388,8 @@ export function AppointmentFormModal({
                                   value={prof.name}
                                   key={prof.id}
                                   onSelect={() => {
-                                    form.setValue(
-                                      'professional_id',
-                                      prof.id
-                                    );
+                                    // camelCase
+                                    form.setValue('professionalId', prof.id);
                                   }}
                                 >
                                   <Check
@@ -437,7 +416,7 @@ export function AppointmentFormModal({
               {/* === Serviço (Combobox) === */}
               <FormField
                 control={form.control}
-                name="service_id"
+                name="serviceId" // camelCase
                 render={({ field }) => (
                   <FormItem className="flex flex-col">
                     <FormLabel>Serviço *</FormLabel>
@@ -471,7 +450,8 @@ export function AppointmentFormModal({
                                   value={service.name}
                                   key={service.id}
                                   onSelect={() => {
-                                    form.setValue('service_id', service.id);
+                                    // camelCase
+                                    form.setValue('serviceId', service.id);
                                   }}
                                 >
                                   <Check
@@ -511,7 +491,7 @@ export function AppointmentFormModal({
                         onChange={(e) =>
                           field.onChange(parseFloat(e.target.value) || 0)
                         }
-                        disabled={!!selectedService} // Desabilita se o preço vem do serviço
+                        disabled={!!selectedService}
                       />
                     </FormControl>
                     <FormMessage />
@@ -522,7 +502,7 @@ export function AppointmentFormModal({
               {/* === Data (Calendar) === */}
               <FormField
                 control={form.control}
-                name="appointment_date"
+                name="appointmentDate" // camelCase
                 render={({ field }) => (
                   <FormItem className="flex flex-col">
                     <FormLabel>Data *</FormLabel>
@@ -537,7 +517,7 @@ export function AppointmentFormModal({
                             )}
                           >
                             {field.value ? (
-                              dayjs(field.value).format('DD/MM/YYYY') // Alterado para dayjs
+                              dayjs(field.value).format('DD/MM/YYYY')
                             ) : (
                               <span>Selecione a data</span>
                             )}
@@ -551,7 +531,6 @@ export function AppointmentFormModal({
                           selected={field.value}
                           onSelect={(day) => {
                             if (!day) return;
-                            // Alterado para dayjs
                             const newDate = dayjs(field.value || new Date())
                               .year(day.getFullYear())
                               .month(day.getMonth())
@@ -560,7 +539,7 @@ export function AppointmentFormModal({
                           }}
                           disabled={(date) =>
                             !editingAppointment &&
-                            date < dayjs().startOf('day').toDate() // Alterado para dayjs
+                            date < dayjs().startOf('day').toDate()
                           }
                         />
                       </PopoverContent>
@@ -574,7 +553,7 @@ export function AppointmentFormModal({
               {watchedProfessionalId && watchedServiceId && (
                 <FormField
                   control={form.control}
-                  name="appointment_date"
+                  name="appointmentDate" // camelCase
                   render={({ field }) => (
                     <FormItem className="space-y-3">
                       <FormLabel>Horário *</FormLabel>
@@ -642,18 +621,6 @@ export function AppointmentFormModal({
           </Form>
         </DialogContent>
       </Dialog>
-
-      {/* Modal de Novo Cliente
-        A lógica de `ClientFormModal` seria importada da feature 'clients'
-        e gerenciada aqui.
-      */}
-      {/* <ClientFormModal
-        isOpen={isClientModalOpen}
-        onClose={() => setIsClientModalOpen(false)}
-        onClientCreated={handleClientCreated}
-        editingClient={null}
-      /> 
-      */}
     </>
   );
 }

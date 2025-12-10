@@ -24,7 +24,6 @@ vi.mock('../hooks/useUpdateServiceMutation', () => ({
 }));
 
 // Mock dos Utilitários de Formatação
-// Isso isola o teste da implementação real de 'utils', focando na lógica do componente
 vi.mock('@/packages/web/src/lib/utils', () => ({
   formatCurrency: (val: number) => {
     if (val === undefined || val === null) return 'R$ 0,00';
@@ -37,7 +36,7 @@ vi.mock('@/packages/web/src/lib/utils', () => ({
   cn: (...inputs: any[]) => inputs.join(' '),
 }));
 
-// Mock Global para ResizeObserver (necessário para alguns componentes do Radix UI/Shadcn em JSDOM)
+// Mock Global para ResizeObserver
 global.ResizeObserver = class ResizeObserver {
   observe() {}
   unobserve() {}
@@ -65,11 +64,8 @@ describe('ServiceFormModal', () => {
     const submitBtn = screen.getByRole('button', { name: /criar serviço/i });
     fireEvent.click(submitBtn);
 
-    // O Zod Schema define 'name' como obrigatório e 'price' positivo
     await waitFor(() => {
         expect(screen.getByText(/nome do serviço é obrigatório/i)).toBeInTheDocument(); 
-        // Nota: O input de preço inicia com 0. Se o schema exige positive (>0), deve falhar.
-        // Ajuste conforme a mensagem exata definida no shared/types.ts
     });
   });
 
@@ -80,10 +76,10 @@ describe('ServiceFormModal', () => {
     // Preencher Nome
     await user.type(screen.getByLabelText(/nome \*/i), 'Corte Novo');
     
-    // Preencher Preço (Simulando digitação que o parseCurrency converte para centavos)
+    // Preencher Preço
     const priceInput = screen.getByLabelText(/preço \(r\$\) \*/i);
     await user.clear(priceInput);
-    await user.type(priceInput, '5000'); // O mock converte isso para 5000 (R$ 50,00)
+    await user.type(priceInput, '5000');
     
     // Preencher Duração
     const durationInput = screen.getByLabelText(/duração \(min\) \*/i);
@@ -95,12 +91,13 @@ describe('ServiceFormModal', () => {
 
     await waitFor(() => {
       expect(mockAddMutate).toHaveBeenCalledTimes(1);
+      // REFATORAÇÃO PADRÃO OURO: Verificando camelCase (imageUrl)
       expect(mockAddMutate).toHaveBeenCalledWith(
         expect.objectContaining({
           name: 'Corte Novo',
           price: 5000,
           duration: 45,
-          image_url: null, // Verifica se inicializou corretamente como null
+          imageUrl: null, // Atualizado de image_url para imageUrl
           color: '#000000',
         }),
         expect.anything()
@@ -109,25 +106,26 @@ describe('ServiceFormModal', () => {
   });
 
   it('deve popular o formulário e chamar updateMutation ao editar', async () => {
+    // REFATORAÇÃO PADRÃO OURO: Objeto mockado agora usa camelCase
     const editingService = {
       id: 10,
-      user_id: 'uid-123',
+      userId: 'uid-123',         // Atualizado de user_id
       name: 'Corte Antigo',
       description: 'Descrição antiga',
-      price: 3000, // R$ 30,00
+      price: 3000,
       duration: 30,
-      image_url: 'http://site.com/img.jpg',
+      imageUrl: 'http://site.com/img.jpg', // Atualizado de image_url
       color: '#ff0000',
-      created_at: '2023-01-01',
-      updated_at: '2023-01-01'
+      createdAt: '2023-01-01',   // Atualizado de created_at
+      updatedAt: '2023-01-01'    // Atualizado de updated_at
     };
 
     const user = userEvent.setup();
+    // @ts-ignore - Ignorando erro de tipagem parcial para simplicidade do teste
     render(<ServiceFormModal isOpen={true} onClose={onClose} editingService={editingService} />);
 
     // Verifica valores iniciais populados
     expect(screen.getByLabelText(/nome \*/i)).toHaveValue('Corte Antigo');
-    // Preço formatado pelo mock: 3000 -> R$ 30,00
     expect(screen.getByLabelText(/preço \(r\$\) \*/i)).toHaveValue('R$ 30,00');
     expect(screen.getByLabelText(/url da imagem/i)).toHaveValue('http://site.com/img.jpg');
     
@@ -140,19 +138,20 @@ describe('ServiceFormModal', () => {
 
     await waitFor(() => {
       expect(mockUpdateMutate).toHaveBeenCalledTimes(1);
+      // REFATORAÇÃO PADRÃO OURO: Verificando payload em camelCase
       expect(mockUpdateMutate).toHaveBeenCalledWith(
         expect.objectContaining({
           id: 10,
           name: 'Corte Editado',
           price: 3000,
-          image_url: 'http://site.com/img.jpg',
+          imageUrl: 'http://site.com/img.jpg', // Atualizado de image_url
         }),
         expect.anything()
       );
     });
   });
 
-  it('deve tratar string vazia em image_url como null na submissão (Correção Crítica)', async () => {
+  it('deve tratar string vazia em imageUrl como null na submissão (Correção Crítica)', async () => {
     const user = userEvent.setup();
     render(<ServiceFormModal isOpen={true} onClose={onClose} />);
 
@@ -170,10 +169,10 @@ describe('ServiceFormModal', () => {
     await user.click(screen.getByRole('button', { name: /criar serviço/i }));
 
     await waitFor(() => {
-        // Verifica se o valor enviado foi null e não ""
+        // REFATORAÇÃO PADRÃO OURO: Verificando se imageUrl (camelCase) é enviado como null
         expect(mockAddMutate).toHaveBeenCalledWith(
             expect.objectContaining({
-                image_url: null
+                imageUrl: null // Atualizado de image_url
             }),
             expect.anything()
         );

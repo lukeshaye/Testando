@@ -1,15 +1,12 @@
 /*
  * Arquivo de Destino: /packages/web/src/features/professionals/components/ProfessionalsDataTable.test.tsx
  *
- * Tarefa: 4. Testes (PTE 2.15)
+ * Tarefa: 4. Testes (PTE 2.15) - Refatoração para camelCase ("Padrão Ouro")
  *
  * Princípios:
- * - PTE (2.15): Mocka os hooks (useProfessionalsQuery, useDeleteProfessionalMutation)
- * para isolar o componente e testar sua lógica de UI.
+ * - PTE (2.15): Mocka os hooks com a estrutura de dados correta (camelCase).
  * - PGEC (2.13): Testa os estados de loading, error e empty.
- * - SoC (2.5): Testa se os botões de "Novo", "Editar" e "Excluir"
- * acionam os estados corretos (abertura de modal/alerta) e
- * delegam a lógica (chamada da mutação).
+ * - SoC (2.5): Testa a delegação de lógica para modais e mutações.
  */
 
 import { render, screen, within } from "@testing-library/react"
@@ -46,7 +43,6 @@ vi.mock("@/components/ui/use-toast", () => ({
 }))
 
 // 4. Mock do Componente Filho (Modal de Formulário) (SoC)
-// O DataTable não deve ser responsável pela lógica interna do formulário.
 vi.mock("./ProfessionalFormModal", () => ({
   ProfessionalFormModal: vi.fn(
     ({
@@ -71,7 +67,7 @@ vi.mock("./ProfessionalFormModal", () => ({
   ),
 }))
 
-// --- Dados de Mock ---
+// --- Dados de Mock (Atualizado para camelCase conforme Passo 2) ---
 
 const mockProfessionals: ProfessionalType[] = [
   {
@@ -79,26 +75,26 @@ const mockProfessionals: ProfessionalType[] = [
     name: "Dr. João Silva",
     color: "#0000ff",
     salary: 500000, // R$ 5.000,00
-    commission_rate: 0.1, // 10%
-    created_at: new Date().toISOString(),
-    user_id: "user-1",
-    work_start_time: null,
-    work_end_time: null,
-    lunch_start_time: null,
-    lunch_end_time: null,
+    commissionRate: 0.1, // Atualizado: commission_rate -> commissionRate
+    createdAt: new Date().toISOString(), // Atualizado: created_at -> createdAt
+    userId: "user-1", // Atualizado: user_id -> userId
+    workStartTime: null, // Atualizado: work_start_time -> workStartTime
+    workEndTime: null, // Atualizado
+    lunchStartTime: null, // Atualizado
+    lunchEndTime: null, // Atualizado
   },
   {
     id: "2",
     name: "Maria Oliveira",
     color: "#ff0000",
     salary: 450000, // R$ 4.500,00
-    commission_rate: 0.05, // 5%
-    created_at: new Date().toISOString(),
-    user_id: "user-2",
-    work_start_time: null,
-    work_end_time: null,
-    lunch_start_time: null,
-    lunch_end_time: null,
+    commissionRate: 0.05, // Atualizado: commission_rate -> commissionRate
+    createdAt: new Date().toISOString(), // Atualizado
+    userId: "user-2", // Atualizado
+    workStartTime: null,
+    workEndTime: null,
+    lunchStartTime: null,
+    lunchEndTime: null,
   },
 ]
 
@@ -286,6 +282,6 @@ describe("ProfessionalsDataTable", () => {
 
     // 5. Verificar se a mutação foi chamada com o ID correto (PTE)
     expect(mockMutate).toHaveBeenCalledTimes(1)
-    expect(mockMutate).toHaveBeenCalledWith(mockProfessionals[1].id) // ID '2'
+    expect(mockMutate).toHaveBeenCalledWith(mockProfessionals[1].id)
   })
 })

@@ -51,17 +51,18 @@ describe('FinancialFormModal', () => {
     });
   });
 
+  // ATUALIZAÇÃO: Objeto mockado agora segue o padrão camelCase (Passo 2 e 4 do Padrão Ouro)
   const mockEntry: FinancialEntry = {
     id: 1,
-    user_id: 1,
+    userId: 1, // snake_case -> camelCase
     description: 'Venda de Software',
     amount: 15050, // R$ 150,50
     type: 'receita',
-    entry_type: 'pontual',
-    entry_date: '2023-10-15T00:00:00.000Z', // Data ISO
+    entryType: 'pontual', // snake_case -> camelCase
+    entryDate: '2023-10-15T00:00:00.000Z', // snake_case -> camelCase (Data ISO)
     category: 'Vendas',
-    created_at: '2023-10-01',
-    updated_at: '2023-10-01'
+    createdAt: '2023-10-01', // snake_case -> camelCase
+    updatedAt: '2023-10-01'  // snake_case -> camelCase
   };
 
   it('deve renderizar o título correto para "Novo Lançamento"', () => {
@@ -109,12 +110,7 @@ describe('FinancialFormModal', () => {
     await user.click(submitBtn);
 
     // Espera pelas mensagens de erro do Zod
-    // Nota: As mensagens exatas dependem da definição do Schema no shared-types, 
-    // mas geralmente "Required" ou validações de string vazia disparam.
-    // Assumindo que o schema exige descrição:
     await waitFor(() => {
-       // O input fica com estado de erro ou mensagem aparece. 
-       // Verificamos se a mutação NÃO foi chamada
        expect(mockAddMutateAsync).not.toHaveBeenCalled();
     });
   });
@@ -139,10 +135,9 @@ describe('FinancialFormModal', () => {
     await user.type(amountInput, '100.50');
 
     // Selecionar Tipo (Dropdown do Radix UI)
-    // 1. Abre o dropdown
-    const typeTrigger = screen.getByRole('combobox', { name: /tipo/i }); // O label "Tipo" pode não estar associado diretamente via aria-label no componente Select do shadcn padrão, as vezes precisa buscar pelo texto do trigger se não tiver label associado
+    const typeTrigger = screen.getByRole('combobox', { name: /tipo/i });
     await user.click(typeTrigger);
-    // 2. Seleciona a opção
+    
     const despesaOption = await screen.findByRole('option', { name: 'Despesa' });
     await user.click(despesaOption);
 
@@ -151,6 +146,7 @@ describe('FinancialFormModal', () => {
     await user.click(submitBtn);
 
     await waitFor(() => {
+      // ATUALIZAÇÃO: Garante que o payload esperado esteja consistente
       expect(mockAddMutateAsync).toHaveBeenCalledWith(expect.objectContaining({
         description: 'Nova Despesa Teste',
         amount: 10050, // 100.50 * 100
@@ -182,6 +178,7 @@ describe('FinancialFormModal', () => {
     await waitFor(() => {
       expect(mockUpdateMutateAsync).toHaveBeenCalledWith({
         id: mockEntry.id,
+        // ATUALIZAÇÃO: O objeto enviado deve respeitar o camelCase do Schema Zod atualizado
         data: expect.objectContaining({
           description: 'Venda Editada',
           amount: 15050, // Valor original mantido

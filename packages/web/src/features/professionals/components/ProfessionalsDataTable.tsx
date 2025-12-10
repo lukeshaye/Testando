@@ -85,15 +85,6 @@ const formatCommission = (rate: number | null | undefined) => {
 }
 
 /**
- * Formata um horário (ex: "09:00:00" -> "09:00").
- * Nota: Mantido local pois é específico de formatação de string de hora parcial.
- */
-const formatTime = (time: string | null | undefined) => {
-  if (!time) return "N/D"
-  return time.substring(0, 5)
-}
-
-/**
  * Componente principal da tabela de dados de profissionais.
  */
 export function ProfessionalsDataTable() {
@@ -189,11 +180,13 @@ export function ProfessionalsDataTable() {
         },
       },
       {
-        accessorKey: "commission_rate",
+        // REFATORAÇÃO STEP 4: Atualizado de 'commission_rate' (snake_case) para 'commissionRate' (camelCase)
+        accessorKey: "commissionRate",
         header: "Comissão",
-        cell: ({ row }) => formatCommission(row.original.commission_rate),
+        // REFATORAÇÃO STEP 4: Acessando a propriedade camelCase do objeto row.original
+        cell: ({ row }) => formatCommission(row.original.commissionRate),
       },
-      // As colunas 'work_hours' e 'lunch_hours' foram removidas
+      // As colunas 'workHours' e 'lunchHours' foram removidas
       // para aderir ao Princípio YAGNI (2.4).
       {
         id: "actions",

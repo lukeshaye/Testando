@@ -45,7 +45,7 @@ export function ServiceFormModal({ isOpen, onClose, editingService }: ServiceFor
       description: '',
       price: 0,
       duration: 30,
-      image_url: null, // Inicializa como null para satisfazer o schema .nullable()
+      imageUrl: null, // Refatorado: image_url -> imageUrl (camelCase)
       color: '#000000',
     },
   });
@@ -59,8 +59,8 @@ export function ServiceFormModal({ isOpen, onClose, editingService }: ServiceFor
           description: editingService.description || '',
           price: editingService.price, 
           duration: editingService.duration,
-          // Garante que string vazia vinda do DB (se houver) vire null ou string válida
-          image_url: editingService.image_url || null,
+          // Refatorado: Garante que string vazia vire null e usa camelCase
+          imageUrl: editingService.imageUrl || null, 
           color: editingService.color || '#000000',
         });
       } else {
@@ -69,7 +69,7 @@ export function ServiceFormModal({ isOpen, onClose, editingService }: ServiceFor
           description: '',
           price: 0,
           duration: 30,
-          image_url: null,
+          imageUrl: null, // Refatorado: image_url -> imageUrl
           color: '#000000',
         });
       }
@@ -80,7 +80,7 @@ export function ServiceFormModal({ isOpen, onClose, editingService }: ServiceFor
     // Sanitização final para garantir que campos opcionais vazios sejam null
     const sanitizedData = {
       ...data,
-      image_url: data.image_url === '' ? null : data.image_url,
+      imageUrl: data.imageUrl === '' ? null : data.imageUrl, // Refatorado: image_url -> imageUrl
       description: data.description === '' ? null : data.description,
       color: data.color === '' ? null : data.color,
     };
@@ -239,14 +239,14 @@ export function ServiceFormModal({ isOpen, onClose, editingService }: ServiceFor
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="image_url">URL da Imagem</Label>
+              <Label htmlFor="imageUrl">URL da Imagem</Label>
               <Controller
-                name="image_url"
+                name="imageUrl" // Refatorado: image_url -> imageUrl
                 control={control}
                 render={({ field: { value, onChange, ...field } }) => (
                   <Input
                     {...field}
-                    id="image_url"
+                    id="imageUrl" // Refatorado: id alinhado com o nome do campo
                     placeholder="https://..."
                     disabled={isSubmitting}
                     value={value || ''}
@@ -258,8 +258,8 @@ export function ServiceFormModal({ isOpen, onClose, editingService }: ServiceFor
                   />
                 )}
               />
-              {errors.image_url && (
-                <p className="text-sm text-destructive">{errors.image_url.message}</p>
+              {errors.imageUrl && ( // Refatorado: errors.image_url -> errors.imageUrl
+                <p className="text-sm text-destructive">{errors.imageUrl.message}</p>
               )}
             </div>
           </div>

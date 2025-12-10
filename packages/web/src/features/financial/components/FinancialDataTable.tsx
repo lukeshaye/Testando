@@ -45,7 +45,7 @@ export function FinancialDataTable() {
   const { data: entries = [], isLoading, isError } = useFinancialEntriesQuery();
   const { mutate: deleteEntry, isPending: isDeleting } = useDeleteFinancialEntryMutation();
 
-  // 2. Estados Locais (Gerenciamento autônomo da UI)
+  // 2. Estados Locais (Gerenciamento autônomo da UI - Princípio 2.13 Nível 1)
   const [sorting, setSorting] = useState<SortingState>([]);
   const [globalFilter, setGlobalFilter] = useState('');
   
@@ -81,10 +81,10 @@ export function FinancialDataTable() {
     }
   };
 
-  // 4. Definição de Colunas
+  // 4. Definição de Colunas (Atualizado para camelCase - Step 4 do Plano)
   const columns: ColumnDef<FinancialEntry>[] = [
     {
-      accessorKey: 'entry_date',
+      accessorKey: 'entryDate', // CORREÇÃO: entry_date -> entryDate
       header: ({ column }) => {
         return (
           <Button
@@ -96,7 +96,7 @@ export function FinancialDataTable() {
           </Button>
         );
       },
-      cell: ({ row }) => formatDate(row.getValue('entry_date')),
+      cell: ({ row }) => formatDate(row.getValue('entryDate')), // CORREÇÃO: entry_date -> entryDate
     },
     {
       accessorKey: 'description',
@@ -119,10 +119,10 @@ export function FinancialDataTable() {
       },
     },
     {
-      accessorKey: 'entry_type',
+      accessorKey: 'entryType', // CORREÇÃO: entry_type -> entryType
       header: 'Frequência',
       cell: ({ row }) => {
-        const entryType = row.getValue('entry_type') as string;
+        const entryType = row.getValue('entryType') as string; // CORREÇÃO: entry_type -> entryType
         return <span className="capitalize text-muted-foreground">{entryType}</span>;
       },
     },
