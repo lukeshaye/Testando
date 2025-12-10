@@ -40,7 +40,7 @@ const AppointmentFormBaseSchema = z.object({
 export const AppointmentFormSchema = AppointmentFormBaseSchema.refine((data) => {
   /**
    * LÓGICA DE VALIDAÇÃO TEMPORAL
-   * Princípio 2.15 (PTE): Lógica determinística e isolada. [cite: 100]
+   * Princípio 2.15 (PTE): Lógica determinística e isolada. 
    * Valida que endDate é posterior a appointmentDate.
    */
   return data.endDate > data.appointmentDate;
@@ -72,19 +72,27 @@ export const CreateAppointmentSchema = z.object({
 })
 .refine((data) => {
   /**
-   * LÓGICA DE VALIDAÇÃO TEMPORAL
-   * Princípio 2.15 (PTE): Lógica determinística e isolada. [cite: 100]
+   * LÓGICA DE VALIDAÇÃO TEMPORAL CORRIGIDA
+   * Correção: Bug de Timezone (UTC shift).
+   * Princípio 2.15 (PTE): Lógica determinística e isolada. 
    */
   try {
-    const dateStr = data.appointmentDate.toISOString().split('T')[0];
-    
-    // Note o uso das novas chaves camelCase: startTime e endTime
-    const start = new Date(`${dateStr}T${data.startTime}`);
-    const end = new Date(`${dateStr}T${data.endTime}`);
+    // CORREÇÃO: Não usamos mais .toISOString() para evitar o shift de data em UTC.
+    // Extraímos horas e minutos das strings validadas pelo Regex
+    const [startHour, startMinute] = data.startTime.split(':').map(Number);
+    const [endHour, endMinute] = data.endTime.split(':').map(Number);
+
+    // Clonamos a data base para garantir imutabilidade (Princípio 2.14) 
+    // e definimos a hora explicitamente, mantendo o dia/mês/ano original local.
+    const start = new Date(data.appointmentDate);
+    start.setHours(startHour, startMinute, 0, 0);
+
+    const end = new Date(data.appointmentDate);
+    end.setHours(endHour, endMinute, 0, 0);
 
     return end > start;
   } catch (e) {
-    return false; // Falha segura (DSpP)
+    return false; // Falha segura (DSpP) [cite: 110]
   }
 }, {
   message: "O horário de término deve ser posterior ao início.",

@@ -1,7 +1,6 @@
 /**
  * @file /packages/api/src/core/middleware.ts
- * 
- * Define middlewares globais, especialmente o Injetor de Dependência. 
+ * * Define middlewares globais, especialmente o Injetor de Dependência. 
  */
 
 import { createMiddleware } from 'hono/factory';
@@ -26,28 +25,41 @@ type AppContext = Context<{
 }>;
 
 /**
+ * Cache Singleton para os clientes.
+ * Isso resolve o problema de performance identificado no plano,
+ * permitindo o reaproveitamento de conexões (Connection Pooling)
+ * entre requisições no mesmo ambiente de execução.
+ */
+let cachedDbClient: ReturnType<typeof createDbClient> | null = null;
+let cachedAuthAdapter: SupabaseAuthAdapter | null = null;
+
+/**
  * Middleware de Injeção de Dependência (DIP).
  *
- * Esta é a função central que implementa o Pilar 2.9 (DIP).
- * Ela instancia os clientes concretos (ex: Supabase) e os adaptadores
- * e, em seguida, injeta as *abstrações* (IAuthAdapter) e os clientes
- * (Drizzle) no contexto Hono (c.var) para serem consumidos pelos handlers.
+ * [cite_start]Esta função implementa o Pilar 2.9 (DIP)[cite: 58].
+ * Ela garante que os clientes sejam instanciados apenas uma vez (Singleton)
+ * e injeta as abstrações no contexto para uso nos handlers.
  */
-// 
 export const injectorMiddleware = createMiddleware(async (c: AppContext, next: Next) => {
-  // 1. Instanciar Clientes
-  const dbClient = createDbClient(c.env); // 
-  const authClient = createAuthClient(c.env); // 
+  // 1. Instanciar Clientes (Singleton / Lazy Initialization)
+  // Verifica se já existe uma instância criada para evitar recriação desnecessária.
+  
+  if (!cachedDbClient) {
+    cachedDbClient = createDbClient(c.env);
+  }
 
-  // 2. Instanciar Adaptadores
-  const authAdapter = new SupabaseAuthAdapter(authClient); // 
+  if (!cachedAuthAdapter) {
+    const authClient = createAuthClient(c.env);
+    cachedAuthAdapter = new SupabaseAuthAdapter(authClient);
+  }
 
   // 3. Injetar Abstrações
-  c.set('db', dbClient); // O cliente Drizzle
-  c.set('authAdapter', authAdapter); // O adaptador de Auth
+  // Usa as instâncias cacheadas.
+  c.set('db', cachedDbClient); 
+  c.set('authAdapter', cachedAuthAdapter); 
 
-  await next(); // 
-}); // 
+  await next(); 
+});
 
 /**
  * Exporta um manipulador de CORS global.

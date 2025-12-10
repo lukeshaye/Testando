@@ -103,6 +103,7 @@ const defaultFormValues: Partial<AppointmentFormData> = {
 /**
  * Componente de Modal para criar e editar agendamentos.
  * Refatorado para camelCase seguindo o Passo 4 do Padrão Ouro.
+ * Corrigido para conformidade com Auditoria (Timezone e Contrato API).
  */
 export function AppointmentFormModal({
   isOpen,
@@ -162,13 +163,11 @@ export function AppointmentFormModal({
 
   /**
    * Efeito: Reseta o formulário ao abrir o modal
-   * Ajustado para ler propriedades em camelCase do editingAppointment
    */
   useEffect(() => {
     if (isOpen) {
       if (editingAppointment) {
         // Modo Edição: Carrega dados existentes
-        // Assumindo que editingAppointment já vem em camelCase da API (Passo 3)
         form.reset({
           clientId: editingAppointment.clientId,
           professionalId: editingAppointment.professionalId,
@@ -207,18 +206,37 @@ export function AppointmentFormModal({
   }, [selectedService, watchedDate, form]);
 
   /**
-   * Efeito: Validação de Slot
+   * Efeito: Validação de Slot (Correção UX Auditoria Item 4)
+   * Se o horário selecionado não estiver mais disponível (ex: mudança de dia),
+   * reseta a seleção de horário e avisa o usuário.
    */
   useEffect(() => {
-    if (!isLoadingSlots && availableTimeSlots.length > 0) {
+    if (!isLoadingSlots && availableTimeSlots.length > 0 && watchedDate) {
+      // Verifica se o timestamp exato do watchedDate existe na lista de slots disponíveis
       const selectedTimeValid = availableTimeSlots.some(
         (slot) => slot.value.getTime() === watchedDate.getTime()
       );
-      if (!selectedTimeValid) {
-        // Lógica de invalidação visual ou tratamento se necessário
+
+      // Se não for válido e não for apenas a data "zerada" (início do dia), limpa
+      const isStartOfDay = dayjs(watchedDate).isSame(dayjs(watchedDate).startOf('day'));
+
+      if (!selectedTimeValid && !isStartOfDay) {
+         // Reseta para o início do dia para "desmarcar" os radio buttons de horário
+         const cleanDate = dayjs(watchedDate).startOf('day').toDate();
+         
+         // Evita loop infinito se já estiver zerado
+         if (watchedDate.getTime() !== cleanDate.getTime()) {
+             form.setValue('appointmentDate', cleanDate);
+             
+             toast({
+                 title: "Horário Indisponível",
+                 description: "O horário selecionado não está disponível nesta nova data. Selecione outro.",
+                 variant: "destructive" // Alerta visual
+             });
+         }
       }
     }
-  }, [availableTimeSlots, isLoadingSlots, watchedDate]);
+  }, [availableTimeSlots, isLoadingSlots, watchedDate, form, toast]);
 
   /**
    * Efeito: Fecha modal no sucesso
@@ -229,17 +247,36 @@ export function AppointmentFormModal({
     }
   }, [addMutation.isSuccess, updateMutation.isSuccess, onClose]);
 
-  // --- Manipulador de Envio ---
+  // --- Manipulador de Envio (Correção Auditoria Item 1 e 2) ---
   function onSubmit(data: AppointmentFormData) {
-    // 2.2 DRY: A conversão camelCase -> snake_case deve ser feita pelo Drizzle/API.
-    // Aqui enviamos camelCase conforme o Schema Zod (Passo 2).
-    
+    // Cálculo dos horários usando Dayjs para garantir consistência local
+    const startDayjs = dayjs(data.appointmentDate);
+    const endDayjs = startDayjs.add(serviceDuration, 'minutes');
+
+    // Correção: Extração de Strings explícitas para a API.
+    // Evita .toISOString() para não converter para UTC e alterar o dia (Bug de Timezone).
+    // Formato esperado pela API (conforme auditoria): startTime "HH:MM", endTime "HH:MM"
+    const formattedDate = startDayjs.format('YYYY-MM-DD'); 
+    const formattedStartTime = startDayjs.format('HH:mm');
+    const formattedEndTime = endDayjs.format('HH:mm');
+
     const payload = {
-      ...data,
+      // Campos diretos
+      clientId: data.clientId,
+      professionalId: data.professionalId,
+      serviceId: data.serviceId,
+      attended: data.attended,
       price: Math.round(data.price * 100), // Conversão para centavos
-      endDate: dayjs(data.appointmentDate) // camelCase
-        .add(serviceDuration, 'minutes')
-        .toDate(),
+      
+      // Campos de Data Corrigidos para o Contrato da API
+      date: formattedDate,       // Data "YYYY-MM-DD" local
+      startTime: formattedStartTime, // "HH:MM" local
+      endTime: formattedEndTime,     // "HH:MM" local
+      
+      // Mantemos appointmentDate/endDate originais apenas se o Schema local exigir validação,
+      // mas o backend deve priorizar date/startTime/endTime
+      appointmentDate: data.appointmentDate,
+      endDate: endDayjs.toDate(),
     };
 
     if (editingAppointment) {
@@ -255,7 +292,6 @@ export function AppointmentFormModal({
   const handleClientCreated = (newClient: ClientType) => {
     setIsClientModalOpen(false);
     if (newClient && newClient.id) {
-      // Atualizado para camelCase: clientId
       form.setValue('clientId', newClient.id, { shouldValidate: true });
       toast({
         title: 'Cliente Adicionado',
@@ -282,7 +318,7 @@ export function AppointmentFormModal({
               {/* === Cliente (Combobox) === */}
               <FormField
                 control={form.control}
-                name="clientId" // camelCase
+                name="clientId" 
                 render={({ field }) => (
                   <FormItem className="flex flex-col">
                     <FormLabel>Cliente *</FormLabel>
@@ -317,7 +353,6 @@ export function AppointmentFormModal({
                                     value={client.name}
                                     key={client.id}
                                     onSelect={() => {
-                                      // camelCase
                                       form.setValue('clientId', client.id);
                                     }}
                                   >
@@ -354,7 +389,7 @@ export function AppointmentFormModal({
               {/* === Profissional (Combobox) === */}
               <FormField
                 control={form.control}
-                name="professionalId" // camelCase
+                name="professionalId" 
                 render={({ field }) => (
                   <FormItem className="flex flex-col">
                     <FormLabel>Profissional *</FormLabel>
@@ -388,7 +423,6 @@ export function AppointmentFormModal({
                                   value={prof.name}
                                   key={prof.id}
                                   onSelect={() => {
-                                    // camelCase
                                     form.setValue('professionalId', prof.id);
                                   }}
                                 >
@@ -416,7 +450,7 @@ export function AppointmentFormModal({
               {/* === Serviço (Combobox) === */}
               <FormField
                 control={form.control}
-                name="serviceId" // camelCase
+                name="serviceId" 
                 render={({ field }) => (
                   <FormItem className="flex flex-col">
                     <FormLabel>Serviço *</FormLabel>
@@ -450,7 +484,6 @@ export function AppointmentFormModal({
                                   value={service.name}
                                   key={service.id}
                                   onSelect={() => {
-                                    // camelCase
                                     form.setValue('serviceId', service.id);
                                   }}
                                 >
@@ -502,7 +535,7 @@ export function AppointmentFormModal({
               {/* === Data (Calendar) === */}
               <FormField
                 control={form.control}
-                name="appointmentDate" // camelCase
+                name="appointmentDate" 
                 render={({ field }) => (
                   <FormItem className="flex flex-col">
                     <FormLabel>Data *</FormLabel>
@@ -553,7 +586,7 @@ export function AppointmentFormModal({
               {watchedProfessionalId && watchedServiceId && (
                 <FormField
                   control={form.control}
-                  name="appointmentDate" // camelCase
+                  name="appointmentDate" 
                   render={({ field }) => (
                     <FormItem className="space-y-3">
                       <FormLabel>Horário *</FormLabel>

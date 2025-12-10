@@ -2,14 +2,12 @@
  * /packages/web/src/features/appointments/components/AppointmentFormModal.test.tsx
  *
  * TAREFA: 4.8 (Testes) - AppointmentFormModal.test.tsx
- * REFATORAÇÃO: Adaptação para CamelCase (Code) vs SnakeCase (DB)
+ * REFATORAÇÃO: Adaptação para CamelCase e Novo Contrato de API (Strings de Hora)
  *
- * PLANO:
- * - Zombar (mock) todos os hooks que o componente consome.
- * - Testar renderização em modo "Criação" e "Edição".
- * - Testar a lógica de 'useAvailableTimeSlots'.
- * - Testar a submissão do formulário (agora enviando payloads em camelCase).
- * - Testar a falha de validação (DSpP 2.16).
+ * PLANO EXECUTADO:
+ * - [X] Validar envio de 'startTime' e 'endTime' (strings) em vez de 'endDate' (Date).
+ * - [X] Manter testes de renderização e mocks existentes.
+ * - [X] Ajustar expectativas de payload para o schema corrigido.
  */
 
 import {
@@ -73,10 +71,10 @@ const mockProfessionals = [
     id: 1,
     name: 'Dr. Teste',
     color: '#ff0000',
-    workStartTime: '09:00', // camelCase
-    workEndTime: '18:00',   // camelCase
-    lunchStartTime: '12:00', // camelCase
-    lunchEndTime: '13:00',   // camelCase
+    workStartTime: '09:00',
+    workEndTime: '18:00',
+    lunchStartTime: '12:00',
+    lunchEndTime: '13:00',
   },
 ];
 
@@ -93,14 +91,14 @@ const mockAvailableSlots = [
 // Objeto de edição atualizado para camelCase
 const mockEditingAppointment = {
   id: 101,
-  appointmentDate: '2025-11-15T10:00:00Z', // camelCase
-  endDate: '2025-11-15T11:00:00Z',         // camelCase
-  clientName: 'Cliente A',                 // camelCase
-  serviceName: 'Corte',                    // camelCase (opcional, dependendo do DTO)
-  professionalName: 'Dr. Teste',           // camelCase (opcional)
-  clientId: 1,                             // camelCase
-  serviceId: 1,                            // camelCase
-  professionalId: 1,                       // camelCase
+  appointmentDate: '2025-11-15T10:00:00Z', // UTC
+  endDate: '2025-11-15T11:00:00Z',         // UTC
+  clientName: 'Cliente A',
+  serviceName: 'Corte',
+  professionalName: 'Dr. Teste',
+  clientId: 1,
+  serviceId: 1,
+  professionalId: 1,
   price: 5000,
   notes: '',
   status: 'CONFIRMED',
@@ -183,7 +181,7 @@ describe('AppointmentFormModal', () => {
   });
 
   it('deve renderizar em modo "Edição" e preencher o formulário', async () => {
-    // @ts-ignore - ignorando erro de tipagem parcial no mock para teste
+    // @ts-ignore
     renderComponent({ editingAppointment: mockEditingAppointment });
 
     expect(screen.getByText('Editar Agendamento')).toBeInTheDocument();
@@ -263,7 +261,7 @@ describe('AppointmentFormModal', () => {
 
   // --- Teste de Submissão ---
 
-  it('deve chamar "updateMutation" com os dados corretos ao salvar (Modo Edição)', async () => {
+  it('deve chamar "updateMutation" com startTime/endTime strings ao salvar (Modo Edição)', async () => {
     // @ts-ignore
     renderComponent({ editingAppointment: mockEditingAppointment });
 
@@ -280,17 +278,26 @@ describe('AppointmentFormModal', () => {
       expect(mockUpdateMutate).toHaveBeenCalledTimes(1);
     });
 
-    // Verifica o payload com propriedades em camelCase
+    // CORREÇÃO: Removemos endDate e esperamos startTime/endTime strings
+    // Baseado no mockEditingAppointment:
+    // appointmentDate: '2025-11-15T10:00:00Z' -> Extrai 10:00
+    // Service duration 60min -> End time 11:00
+    
+    // Clona o objeto para manipular expectativa
+    const { endDate, ...expectedBase } = mockEditingAppointment;
+
     const expectedPayload = {
-      ...mockEditingAppointment,
+      ...expectedBase,
       appointmentDate: new Date(mockEditingAppointment.appointmentDate),
-      endDate: new Date(mockEditingAppointment.endDate),
+      startTime: '10:00', // Payload agora exige string HH:MM
+      endTime: '11:00',   // Payload agora exige string HH:MM
       price: 5000,
     };
+
     expect(mockUpdateMutate).toHaveBeenCalledWith(expectedPayload);
   });
 
-  it('deve chamar "addMutation" com os dados corretos (Modo Criação)', async () => {
+  it('deve chamar "addMutation" com os dados corretos e strings de hora (Modo Criação)', async () => {
     mockedUseAvailableTimeSlots.mockReturnValue({
       availableTimeSlots: mockAvailableSlots,
       isLoading: false,
@@ -328,19 +335,27 @@ describe('AppointmentFormModal', () => {
     });
 
     const expectedDate = mockAvailableSlots[0].value;
-    const expectedEndDate = new Date('2025-11-15T11:00:00Z');
+    // O mock selecionado é 10:00, duração 60min -> EndTime seria 11:00 (calculado no submit)
 
-    // Verifica o payload com propriedades em camelCase
+    // CORREÇÃO: Verificamos o envio de strings startTime/endTime
     expect(mockAddMutate).toHaveBeenCalledWith(
       expect.objectContaining({
-        clientId: 1,         // camelCase
-        professionalId: 1,   // camelCase
-        serviceId: 1,        // camelCase
+        clientId: 1,
+        professionalId: 1,
+        serviceId: 1,
         price: 5000,
-        appointmentDate: expectedDate, // camelCase
-        endDate: expectedEndDate,      // camelCase
+        appointmentDate: expectedDate,
+        startTime: '10:00', // Novo contrato da API
+        endTime: '11:00',   // Novo contrato da API
         attended: false,
       }),
+    );
+    
+    // Garante que endDate NÃO está sendo enviado (pois causa erro no schema)
+    expect(mockAddMutate).not.toHaveBeenCalledWith(
+        expect.objectContaining({
+            endDate: expect.anything()
+        })
     );
   });
 
@@ -375,7 +390,7 @@ describe('AppointmentFormModal', () => {
     });
   });
 
-  // --- [CORREÇÃO] Teste de Validação (DSpP 2.16) ---
+  // --- Teste de Validação (DSpP 2.16) ---
 
   it('deve mostrar mensagens de erro de validação (DSpP 2.16) ao submeter vazio', async () => {
     renderComponent({ editingAppointment: null });
@@ -388,9 +403,6 @@ describe('AppointmentFormModal', () => {
 
     await waitFor(() => {
       expect(mockAddMutate).not.toHaveBeenCalled();
-
-      // Agora a validação Zod ocorre nos campos camelCase (clientId, professionalId, serviceId)
-      // O erro 'Required' deve aparecer 3 vezes.
       const errorMessages = screen.getAllByText('Required');
       expect(errorMessages).toHaveLength(3);
     });

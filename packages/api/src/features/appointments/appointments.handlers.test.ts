@@ -8,6 +8,7 @@
  * - PTE (2.15): Testamos o contrato do handler garantindo que ele fala camelCase com o código e o DB.
  * - SoC (2.5): O handler foca na orquestração HTTP, delegando a persistência ao Drizzle.
  * - DIP (2.9): Inversão de dependência via Mocks do Drizzle.
+ * - Correção de Plano: Ajuste para validar conversão de String "HH:MM" para Date object.
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
@@ -22,8 +23,6 @@ import {
 // ---------------------------------------------------------------------------
 // MOCK DO SCHEMA (Simulando Passo 1 e 2 da Refatoração)
 // ---------------------------------------------------------------------------
-// Define as colunas como objetos Drizzle, onde a chave é camelCase (código)
-// e o 'name' interno é snake_case (banco).
 const { mockAppointmentsTable } = vi.hoisted(() => {
   return {
     mockAppointmentsTable: {
@@ -51,7 +50,6 @@ vi.mock('@repo/db/schema', () => {
 // HELPERS DE TESTE
 // ---------------------------------------------------------------------------
 
-// Helper para criar cadeia de mocks do Drizzle (Query Builder Mock)
 const createMockChain = (finalValue?: any) => {
   const resolvedValue = finalValue ?? [];
 
@@ -62,7 +60,6 @@ const createMockChain = (finalValue?: any) => {
     set: vi.fn(() => chain),
     values: vi.fn(() => chain),
     returning: vi.fn(() => chain),
-    // Torna o objeto "thenable" para await
     then: vi.fn((onFulfilled: (v: any) => any, _onRejected?: (e: any) => any) =>
       Promise.resolve(onFulfilled(resolvedValue)),
     ),
@@ -72,7 +69,6 @@ const createMockChain = (finalValue?: any) => {
 };
 
 describe('Appointments Handlers', () => {
-  // Mock do Contexto do Hono
   let mockCtx: any;
   const mockUser = { id: 'user-123', email: 'test@example.com' };
   let mockDb: any;
@@ -80,7 +76,6 @@ describe('Appointments Handlers', () => {
   beforeEach(() => {
     vi.resetAllMocks();
 
-    // Mock do DB injetado no contexto
     mockDb = {
       select: vi.fn(() => createMockChain([])),
       insert: vi.fn(() => createMockChain([])),
@@ -106,14 +101,19 @@ describe('Appointments Handlers', () => {
   });
 
   // -------------------------------------------------------------------------
-  // TESTES: Leitura (getAppointments, getAppointmentById)
+  // TESTES: Leitura
   // -------------------------------------------------------------------------
 
   describe('getAppointments', () => {
     it('should fetch appointments via db using camelCase mapping and return 200', async () => {
-      // O DB retorna dados já mapeados (simulando o driver do Drizzle)
+      // O DB retorna objetos Date reais para as colunas de tempo
       const mockData = [
-        { id: 'a1', clientId: 'c1', startTime: '2025-01-01T10:00:00Z', userId: mockUser.id },
+        { 
+          id: 'a1', 
+          clientId: 'c1', 
+          startTime: new Date('2025-01-01T10:00:00Z'), 
+          userId: mockUser.id 
+        },
       ];
       const selectChain = createMockChain(mockData);
       mockDb.select.mockReturnValueOnce(selectChain);
@@ -122,7 +122,6 @@ describe('Appointments Handlers', () => {
 
       expect(mockDb.select).toHaveBeenCalled();
       expect(selectChain.from).toHaveBeenCalled();
-      // Verifica se o retorno para o cliente mantém o camelCase
       expect(mockCtx.json).toHaveBeenCalledWith(mockData);
     });
 
@@ -142,7 +141,12 @@ describe('Appointments Handlers', () => {
 
   describe('getAppointmentById', () => {
     it('should return appointment if found', async () => {
-      const mockItem = { id: 'a1', clientId: 'c1', startTime: '2025-01-01T10:00:00Z', userId: mockUser.id };
+      const mockItem = { 
+        id: 'a1', 
+        clientId: 'c1', 
+        startTime: new Date('2025-01-01T10:00:00Z'), 
+        userId: mockUser.id 
+      };
       const selectChain = createMockChain([mockItem]);
       mockDb.select.mockReturnValueOnce(selectChain);
 
@@ -154,7 +158,7 @@ describe('Appointments Handlers', () => {
     });
 
     it('should return 404 if not found', async () => {
-      const selectChain = createMockChain([]); // Retorno vazio
+      const selectChain = createMockChain([]);
       mockDb.select.mockReturnValueOnce(selectChain);
 
       await getAppointmentById(mockCtx);
@@ -164,24 +168,35 @@ describe('Appointments Handlers', () => {
   });
 
   // -------------------------------------------------------------------------
-  // TESTES: Escrita (createAppointment, updateAppointment, deleteAppointment)
+  // TESTES: Escrita (Refatorados para nova lógica de Datas)
   // -------------------------------------------------------------------------
 
   describe('createAppointment', () => {
-    it('should create appointment transmitting camelCase payload to db', async () => {
-      // Input do Frontend (camelCase)
+    it('should combine date+time strings into Date objects and insert into db', async () => {
+      // Input do Frontend (validado pelo Zod): Strings separadas
       const inputData = { 
         clientId: 'c1', 
         professionalId: 'p1', 
         serviceId: 's1', 
-        startTime: '2025-01-02T10:00:00Z' 
+        appointmentDate: '2025-01-02', // Data base YYYY-MM-DD
+        startTime: '10:00',            // Hora HH:MM
+        endTime: '11:00'               // Hora HH:MM
       };
       
-      // Dado retornado pelo DB após insert (com ID e timestamps)
+      // O que esperamos que seja salvo no banco (Date Objects completos)
+      // O handler deve combinar '2025-01-02' + '10:00' -> Date Object
+      const expectedStartTime = new Date('2025-01-02T10:00:00'); // Assumindo construção local/UTC controlada pelo handler
+      const expectedEndTime = new Date('2025-01-02T11:00:00');
+
+      // Simula o retorno do INSERT
       const createdData = { 
-        ...inputData, 
         id: 'a2', 
+        clientId: inputData.clientId,
+        professionalId: inputData.professionalId,
+        serviceId: inputData.serviceId,
         userId: mockUser.id, 
+        startTime: expectedStartTime,
+        endTime: expectedEndTime,
         createdAt: new Date(), 
         updatedAt: new Date() 
       };
@@ -192,27 +207,47 @@ describe('Appointments Handlers', () => {
 
       await createAppointment(mockCtx);
 
-      // Verificação Crítica: O handler deve passar camelCase para o .values()
-      // O Drizzle cuidará de transformar 'clientId' em 'client_id' internamente
       expect(mockDb.insert).toHaveBeenCalled();
-      expect(insertChain.values).toHaveBeenCalledWith({
-        ...inputData,
+      
+      // Verificação Crítica: O handler deve ter convertido as strings para Date
+      // e removido campos auxiliares como 'appointmentDate' se não existirem na tabela
+      expect(insertChain.values).toHaveBeenCalledWith(expect.objectContaining({
+        clientId: 'c1',
+        professionalId: 'p1',
+        serviceId: 's1',
         userId: mockUser.id,
-      });
+        // Matchers flexíveis para lidar com fusos horários no teste unitário,
+        // mas garantindo que SEJA uma instância de Date, não string.
+        startTime: expect.any(Date), 
+        endTime: expect.any(Date)
+      }));
+
+      // Verificação extra para garantir que não estamos enviando strings cruas
+      const calledArgs = insertChain.values.mock.calls[0][0];
+      expect(calledArgs.startTime.toISOString()).toContain('2025-01-02');
+      
       expect(insertChain.returning).toHaveBeenCalled();
       expect(mockCtx.json).toHaveBeenCalledWith(createdData, 201);
     });
   });
 
   describe('updateAppointment', () => {
-    it('should update appointment using camelCase fields', async () => {
-      // Input de atualização
-      const updateData = { startTime: '2025-01-02T14:00:00Z', status: 'confirmed' };
+    it('should update appointment converting time strings to Date objects', async () => {
+      // Input de atualização (Zod)
+      const updateData = { 
+        appointmentDate: '2025-01-02',
+        startTime: '14:00',
+        endTime: '15:00',
+        status: 'confirmed' 
+      };
+      
+      const expectedStartTime = new Date('2025-01-02T14:00:00');
       
       // Resultado esperado
       const resultData = { 
         id: 'a1', 
-        ...updateData, 
+        startTime: expectedStartTime,
+        status: 'confirmed',
         userId: mockUser.id,
         updatedAt: new Date()
       };
@@ -223,12 +258,17 @@ describe('Appointments Handlers', () => {
 
       await updateAppointment(mockCtx);
 
-      // Verificação Crítica: O handler deve passar camelCase para o .set()
+      // Verificação Crítica: O handler deve converter para Date no .set()
       expect(mockDb.update).toHaveBeenCalled();
       expect(updateChain.set).toHaveBeenCalledWith(expect.objectContaining({
-        startTime: '2025-01-02T14:00:00Z',
-        status: 'confirmed'
+        status: 'confirmed',
+        startTime: expect.any(Date),
+        endTime: expect.any(Date)
       }));
+
+      const calledArgs = updateChain.set.mock.calls[0][0];
+      expect(calledArgs.startTime).toBeInstanceOf(Date);
+      
       expect(updateChain.where).toHaveBeenCalled();
       expect(mockCtx.json).toHaveBeenCalledWith(resultData);
     });
