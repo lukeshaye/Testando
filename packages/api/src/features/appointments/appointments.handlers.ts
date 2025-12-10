@@ -1,40 +1,28 @@
-/**
- * /packages/api/src/features/appointments/appointments.handlers.ts
- *
- * (Executor: LLM 2)
- *
- * Tarefa: 3.3 [Source: 95]
- * De Onde: Lógica de src/shared/store.ts e src/worker/index.ts. [Source: 136]
- * O Quê: Criar e exportar funções de handler (ex: getAppointments, createAppointment). [Source: 107]
- * Como:
- * - Handlers devem usar sintaxe Drizzle (c.var.db). [Source: 137]
- * - Handlers devem aplicar a lógica de user_id (vinda de c.var.user) em todas as consultas. [Source: 137]
- */
-
 import { Context } from 'hono';
 import { eq, and, desc } from 'drizzle-orm';
-import { Variables } from '../../types';
-// [Source: 62] O schema é injetado, mas os handlers precisam da referência das tabelas (assumindo Módulo 2)
 import { appointments } from '@repo/db/schema';
+import { Variables } from '../../types';
 
-// Define o tipo de Contexto para incluir as Variáveis injetadas [Source: 144, 162]
+// Define o tipo de Contexto para incluir as Variáveis injetadas (User, DB)
 type AppContext = Context<{ Variables: Variables }>;
 
 /**
  * Handler para buscar todos os agendamentos (GET /)
- * [Source: 107, 110-115]
+ * Princípio 2.12 (CQRS): Operação de Leitura otimizada
  */
 export const getAppointments = async (c: AppContext) => {
-  const user = c.var.user; // [Source: 111, 137]
+  const user = c.var.user;
 
   try {
-    const data = await c.var.db // [Source: 109]
+    // O Drizzle converterá automaticamente 'start_time' (DB) para 'startTime' (JSON)
+    // graças ao schema definido no Passo 1.
+    const data = await c.var.db
       .select()
       .from(appointments)
-      .where(eq(appointments.userId, user.id)) // [Source: 113, 137]
-      .orderBy(desc(appointments.startTime)); // Ordenação comum para agendamentos
+      .where(eq(appointments.userId, user.id)) // Usa propriedade camelCase do schema
+      .orderBy(desc(appointments.startTime));
 
-    return c.json(data); // [Source: 114]
+    return c.json(data);
   } catch (error) {
     console.error('Error fetching appointments:', error);
     return c.json({ error: 'Failed to fetch appointments' }, 500);
@@ -46,16 +34,16 @@ export const getAppointments = async (c: AppContext) => {
  */
 export const getAppointmentById = async (c: AppContext) => {
   const { id } = c.req.param();
-  const user = c.var.user; // [Source: 137]
+  const user = c.var.user;
 
   try {
-    const data = await c.var.db // [Source: 109]
+    const data = await c.var.db
       .select()
       .from(appointments)
       .where(
         and(
           eq(appointments.id, id),
-          eq(appointments.userId, user.id) // [Source: 137]
+          eq(appointments.userId, user.id) // Garante segurança (Tenant isolation)
         )
       );
 
@@ -71,22 +59,23 @@ export const getAppointmentById = async (c: AppContext) => {
 
 /**
  * Handler para criar um novo agendamento (POST /)
- * [Source: 107, 116-122]
+ * Princípio 2.16 (Design Seguro): userId é injetado pelo backend, nunca pelo payload.
  */
 export const createAppointment = async (c: AppContext) => {
-  const newAppointmentData = c.req.valid('json'); // [Source: 117]
-  const user = c.var.user; // [Source: 118, 137]
+  // O payload já chega em camelCase (validado pelo Zod no Passo 2)
+  const newAppointmentData = c.req.valid('json');
+  const user = c.var.user;
 
   try {
-    const data = await c.var.db // [Source: 109]
+    const data = await c.var.db
       .insert(appointments)
       .values({
         ...newAppointmentData,
-        userId: user.id, // [Source: 120, 137]
+        userId: user.id, // Injeção segura do ID do usuário
       })
-      .returning(); // [Source: 120]
+      .returning(); // Retorna o objeto criado já mapeado (camelCase)
 
-    return c.json(data[0], 201); // [Source: 121]
+    return c.json(data[0], 201);
   } catch (error) {
     console.error('Error creating appointment:', error);
     return c.json({ error: 'Failed to create appointment' }, 500);
@@ -95,28 +84,29 @@ export const createAppointment = async (c: AppContext) => {
 
 /**
  * Handler para atualizar um agendamento (PUT /:id)
+ * Princípio 2.14 (Imutabilidade): O update cria um novo estado no banco com updatedAt atualizado.
  */
 export const updateAppointment = async (c: AppContext) => {
   const { id } = c.req.param();
-  const updatedData = c.req.valid('json'); // [Source: 103]
-  const user = c.var.user; // [Source: 137]
+  const updatedData = c.req.valid('json');
+  const user = c.var.user;
 
-  // Remover campos protegidos que não devem ser atualizados diretamente
+  // Proteção de campos imutáveis ou gerenciados pelo sistema
   delete updatedData.id;
   delete updatedData.userId;
   delete updatedData.createdAt;
 
   try {
-    const data = await c.var.db // [Source: 109]
+    const data = await c.var.db
       .update(appointments)
       .set({
-        ...updatedData,
-        updatedAt: new Date(), // Atualiza o timestamp
+        ...updatedData, // Spreads propriedades camelCase (ex: startTime, notes)
+        updatedAt: new Date(), // Atualiza explicitamente o timestamp
       })
       .where(
         and(
           eq(appointments.id, id),
-          eq(appointments.userId, user.id) // [Source: 137]
+          eq(appointments.userId, user.id)
         )
       )
       .returning();
@@ -136,15 +126,15 @@ export const updateAppointment = async (c: AppContext) => {
  */
 export const deleteAppointment = async (c: AppContext) => {
   const { id } = c.req.param();
-  const user = c.var.user; // [Source: 137]
+  const user = c.var.user;
 
   try {
-    const data = await c.var.db // [Source: 109]
+    const data = await c.var.db
       .delete(appointments)
       .where(
         and(
           eq(appointments.id, id),
-          eq(appointments.userId, user.id) // [Source: 137]
+          eq(appointments.userId, user.id)
         )
       )
       .returning({ deletedId: appointments.id });

@@ -11,9 +11,14 @@ const mockCredentials = {
   password: 'password123',
 };
 
+// [Ajuste Padrão Ouro]: Objeto AuthUser atualizado para refletir o schema completo
+// Isso alinha com o Passo 1 (Campos de Auditoria) e Passo 2 (Shared Types em camelCase)
 const mockUser: AuthUser = {
   id: 'user-uuid-123',
   email: 'test@example.com',
+  // Adicionando campos de auditoria obrigatórios no novo padrão
+  createdAt: new Date('2024-01-01T10:00:00Z'),
+  updatedAt: new Date('2024-01-01T10:00:00Z'),
 };
 
 const mockAuthResult = {
@@ -21,7 +26,7 @@ const mockAuthResult = {
   token: 'mock-jwt-token',
 };
 
-// Mock da dependência IAuthAdapter [Ref: 133]
+// Mock da dependência IAuthAdapter [Ref: 133 - Testabilidade/Mocks]
 const mockAuthAdapter: IAuthAdapter = {
   validateToken: vi.fn(),
   signIn: vi.fn(),
@@ -54,7 +59,7 @@ const mockContext = {
 // Resetar mocks antes de cada teste
 beforeEach(() => {
   vi.clearAllMocks();
-  // Resetar implementações de mock
+  // Resetar implementações de mock para o "caminho feliz"
   mockAuthAdapter.signIn.mockResolvedValue(mockAuthResult);
   mockAuthAdapter.signUp.mockResolvedValue(mockAuthResult);
   mockContext.req.valid.mockReturnValue(mockCredentials);
@@ -65,13 +70,14 @@ beforeEach(() => {
 describe('Auth Handlers', () => {
   describe('signInHandler', () => {
     it('deve chamar authAdapter.signIn e retornar usuário/token com status 200 em caso de sucesso', async () => {
+      // Princípio da Testabilidade Explícita (PTE) [cite: 101]
       await signInHandler(mockContext as any);
 
       // Verifica se os dados validados foram lidos
       expect(mockContext.req.valid).toHaveBeenCalledWith('json');
-      // Verifica se o método correto do adaptador foi chamado [Ref: 133]
+      // Verifica se o método correto do adaptador foi chamado com camelCase inputs
       expect(mockAuthAdapter.signIn).toHaveBeenCalledWith(mockCredentials);
-      // Verifica a resposta de sucesso
+      // Verifica a resposta de sucesso contendo o objeto user em camelCase
       expect(mockContext.json).toHaveBeenCalledWith(mockAuthResult, 200);
     });
 
@@ -105,16 +111,16 @@ describe('Auth Handlers', () => {
     it('deve chamar authAdapter.signUp e retornar usuário/token com status 201 em caso de sucesso', async () => {
       await signUpHandler(mockContext as any);
 
-      // Verifica se os dados validados foram lidos
+      // Verifica leitura dos dados
       expect(mockContext.req.valid).toHaveBeenCalledWith('json');
-      // Verifica se o método correto do adaptador foi chamado [Ref: 133]
+      // Verifica chamada ao adaptador
       expect(mockAuthAdapter.signUp).toHaveBeenCalledWith(mockCredentials);
-      // Verifica a resposta de sucesso (201 Created)
+      // Verifica resposta 201 Created
       expect(mockContext.json).toHaveBeenCalledWith(mockAuthResult, 201);
     });
 
     it('deve retornar 400 se authAdapter.signUp retornar null (ex: usuário já existe)', async () => {
-      // Configura o mock para falha (ex: usuário já existe)
+      // Configura o mock para falha
       mockAuthAdapter.signUp.mockResolvedValue(null);
 
       await signUpHandler(mockContext as any);

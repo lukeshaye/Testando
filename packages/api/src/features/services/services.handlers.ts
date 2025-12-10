@@ -1,33 +1,30 @@
 /**
  * /packages/api/src/features/services/services.handlers.ts
  *
- * (Executor: Implementando estritamente o $$PLANO_DE_FEATURE$$)
+ * (Executor: Passo 3 - A Lógica)
  *
- * De Onde (Refatoração): Lógica de src/shared/store.ts e src/worker/index.ts.
- * O Quê (Lógica): Criar e exportar funções de handler para a feature 'services'.
- * Como (Princípios):
- * - Todos os handlers devem usar sintaxe Drizzle (c.var.db).
- * - Todos os handlers devem aplicar a lógica de user_id (c.var.user) em todas as consultas.
- * - Os handlers usam o cliente Drizzle injetado (c.var.db).
- * - createService usa c.req.valid('json') e injeta userId.
- * - getServices filtra por userId.
+ * Objetivo: Handlers alinhados ao "Padrão Ouro".
+ * - Recebe CamelCase do Frontend/Zod.
+ * - Passa CamelCase para o Drizzle.
+ * - Drizzle converte automaticamente para Snake_case no banco.
  */
 
 import { Context } from 'hono';
 import { eq, and } from 'drizzle-orm';
-// O schema (Módulo 2) é assumido como estando disponível via alias de path
 import { services } from '@repo/db/schema';
 import { Variables } from '../../types';
 
 type HandlerContext = Context<{ Variables: Variables }>;
 
 /**
- * Handler para buscar todos os serviços (filtrado por usuário).
+ * GET /services
+ * Busca todos os serviços do usuário logado.
  */
 export const getServices = async (c: HandlerContext) => {
   const user = c.var.user;
 
   try {
+    // Graças ao Passo 1 (Schema), services.userId mapeia para user_id no banco
     const data = await c.var.db
       .select()
       .from(services)
@@ -41,7 +38,8 @@ export const getServices = async (c: HandlerContext) => {
 };
 
 /**
- * Handler para buscar um serviço específico (filtrado por usuário).
+ * GET /services/:id
+ * Busca um serviço específico garantindo tenancy.
  */
 export const getServiceById = async (c: HandlerContext) => {
   const user = c.var.user;
@@ -54,13 +52,14 @@ export const getServiceById = async (c: HandlerContext) => {
       .where(
         and(
           eq(services.id, id),
-          eq(services.userId, user.id) // RLS/Tenancy
+          eq(services.userId, user.id) // RLS/Tenancy Application
         )
       );
 
     if (data.length === 0) {
       return c.json({ error: 'Service not found or unauthorized' }, 404);
     }
+    
     return c.json(data[0]);
   } catch (error) {
     console.error('Error fetching service:', error);
@@ -69,9 +68,11 @@ export const getServiceById = async (c: HandlerContext) => {
 };
 
 /**
- * Handler para criar um novo serviço (associado ao usuário).
+ * POST /services
+ * Cria um serviço recebendo payload em camelCase.
  */
 export const createService = async (c: HandlerContext) => {
+  // newServiceData já vem em camelCase e validado pelo Zod (Passo 2)
   const newServiceData = c.req.valid('json');
   const user = c.var.user;
 
@@ -80,7 +81,7 @@ export const createService = async (c: HandlerContext) => {
       .insert(services)
       .values({
         ...newServiceData,
-        userId: user.id, // Garantindo tenancy
+        userId: user.id, // Injeção segura do Tenant
       })
       .returning();
 
@@ -92,25 +93,28 @@ export const createService = async (c: HandlerContext) => {
 };
 
 /**
- * Handler para atualizar um serviço (filtrado por usuário).
+ * PATCH /services/:id
+ * Atualiza um serviço recebendo payload em camelCase.
  */
 export const updateService = async (c: HandlerContext) => {
   const { id } = c.req.param();
+  // updatedValues em camelCase (ex: durationMinutes)
   const updatedValues = c.req.valid('json');
   const user = c.var.user;
 
-  // Remover campos que não devem ser atualizados diretamente (ex: id, userId)
-  delete updatedValues.id;
-  delete updatedValues.userId;
+  // Sanitização de segurança: impede alteração do ID ou Dono
+  // (Embora o Zod deva prevenir isso, é uma camada extra de segurança do Handler)
+  delete (updatedValues as any).id;
+  delete (updatedValues as any).userId;
 
   try {
     const data = await c.var.db
       .update(services)
-      .set(updatedValues)
+      .set(updatedValues) // Drizzle mapeia automaticamente para snake_case no banco
       .where(
         and(
           eq(services.id, id),
-          eq(services.userId, user.id) // RLS/Tenancy
+          eq(services.userId, user.id) // RLS/Tenancy Check
         )
       )
       .returning();
@@ -127,7 +131,8 @@ export const updateService = async (c: HandlerContext) => {
 };
 
 /**
- * Handler para deletar um serviço (filtrado por usuário).
+ * DELETE /services/:id
+ * Deleta um serviço garantindo tenancy.
  */
 export const deleteService = async (c: HandlerContext) => {
   const { id } = c.req.param();
@@ -139,7 +144,7 @@ export const deleteService = async (c: HandlerContext) => {
       .where(
         and(
           eq(services.id, id),
-          eq(services.userId, user.id) // RLS/Tenancy
+          eq(services.userId, user.id) // RLS/Tenancy Check
         )
       )
       .returning();

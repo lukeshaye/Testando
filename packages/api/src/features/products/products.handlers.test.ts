@@ -2,12 +2,10 @@
  * @file /packages/api/src/features/products/products.handlers.test.ts
  * @overview Testes unitários para os handlers da feature 'products'.
  *
- * @see - Arquivo: /packages/api/src/features/clients/clients.handlers.test.ts (Usado como Templo)
- * @see - O Quê: Testes unitários para os handlers.
- * @see - Como (Princípios):
- * @see - PTE (2.15): Mockar c.var.db (Drizzle mockado) e c.var.user.
- * @see - Testar se getClients (getProducts) chama db.select().from(products)...
- * @see - Testar se createClient (createProduct) chama db.insert(products)...
+ * @see - Refatoração "Padrão Ouro": Alinhado com Step 3 (Handlers em camelCase).
+ * @see - Princípios:
+ * @see - PTE (2.15): Mockar c.var.db (Drizzle) e c.var.user.
+ * @see - DRY (2.2): Reuso de mocks e factories.
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -19,13 +17,24 @@ import {
   updateProduct,
   deleteProduct,
 } from './products.handlers';
-import { products } from '@db/schema'; // Usado para verificação de mock
+import { products } from '@db/schema'; 
 
-// Mock do usuário (c.var.user) 
+// Mock do usuário (c.var.user)
 const mockUser = { id: 'user-123', email: 'test@test.com' };
 
-// Mock do cliente Drizzle (c.var.db) 
-// Criamos um objeto encadeável que retorna a si mesmo para suportar chaining infinito
+// Mock de dados padrão incluindo campos de auditoria (Passo 1 da refatoração)
+const mockDate = new Date();
+const baseProduct = {
+  id: 'prod-1',
+  name: 'Test Product',
+  price: 100, // Exemplo de valor numérico
+  userId: mockUser.id, // camelCase estrito conforme Step 2 e 3
+  createdAt: mockDate,
+  updatedAt: mockDate,
+};
+
+// Mock do cliente Drizzle (c.var.db)
+// Chainable mock helper
 const createMockChain = (finalValue?: any) => {
   const chain: any = {
     from: vi.fn(() => chain),
@@ -38,7 +47,7 @@ const createMockChain = (finalValue?: any) => {
   return chain;
 };
 
-// Mock do DB que retorna cadeias encadeáveis
+// Mock do DB
 const mockDb: any = {
   select: vi.fn(),
   insert: vi.fn(),
@@ -49,14 +58,14 @@ const mockDb: any = {
 // Resetar mocks antes de cada teste
 beforeEach(() => {
   vi.resetAllMocks();
-  
-  // Configurar mocks padrão (cada teste pode sobrescrever se necessário)
-  mockDb.insert.mockReturnValue(createMockChain([{ id: 'prod-new', name: 'New Product', userId: mockUser.id }]));
-  mockDb.update.mockReturnValue(createMockChain([{ id: 'prod-1', name: 'Updated Product', userId: mockUser.id }]));
-  mockDb.delete.mockReturnValue(createMockChain([{ id: 'prod-1' }]));
+
+  // Configuração padrão dos mocks (Happy Path)
+  mockDb.insert.mockReturnValue(createMockChain([{ ...baseProduct, id: 'prod-new', name: 'New Product' }]));
+  mockDb.update.mockReturnValue(createMockChain([{ ...baseProduct, name: 'Updated Product' }]));
+  mockDb.delete.mockReturnValue(createMockChain([{ ...baseProduct }]));
 });
 
-// Helper para criar um mock de Contexto
+// Helper para criar contexto (Factory Pattern)
 const createMockContext = (reqBody: unknown = null, params: Record<string, string> = {}) => {
   return {
     var: {
@@ -68,65 +77,68 @@ const createMockContext = (reqBody: unknown = null, params: Record<string, strin
       param: vi.fn((key) => (key ? params[key] : params)),
     },
     json: vi.fn((data, status) => ({ status, data })),
-  } as unknown as Context<{ Variables: any }>; // Tipagem flexível para teste
+  } as unknown as Context<{ Variables: any }>;
 };
 
 // --- Test Suites ---
 
 describe('Products Handlers', () => {
   describe('getProducts', () => {
-    it('deve chamar db.select.from.where com o userId correto', async () => {
-      // (Adaptado para getProducts)
+    it('deve chamar db.select.from.where usando userId (camelCase)', async () => {
       const c = createMockContext();
-      const whereMock = vi.fn(() => Promise.resolve([{ id: 'prod-1', name: 'Test Product', userId: mockUser.id }]));
-      const fromMock = vi.fn(() => ({
-        where: whereMock,
-      }));
-      const selectChain = {
-        from: fromMock,
-      };
-      mockDb.select.mockReturnValueOnce(selectChain);
       
+      // Mock específico para o Select
+      const whereMock = vi.fn(() => Promise.resolve([baseProduct]));
+      const fromMock = vi.fn(() => ({ where: whereMock }));
+      const selectChain = { from: fromMock };
+      
+      mockDb.select.mockReturnValueOnce(selectChain);
+
       await getProducts(c);
 
       expect(mockDb.select).toHaveBeenCalled();
       expect(fromMock).toHaveBeenCalledWith(products);
-      expect(whereMock).toHaveBeenCalled(); // (eq(products.userId, user.id))
-      expect(c.json).toHaveBeenCalledWith(expect.any(Array));
+      // Verifica se o handler aplicou o filtro corretamente
+      expect(whereMock).toHaveBeenCalled(); 
+      expect(c.json).toHaveBeenCalledWith(expect.arrayContaining([
+        expect.objectContaining({ userId: mockUser.id }) // Garante retorno em camelCase
+      ]));
     });
   });
 
   describe('getProductById', () => {
-    it('deve chamar db.select.from.where com id e userId', async () => {
+    it('deve retornar o produto se o ID e userId corresponderem', async () => {
       const c = createMockContext(null, { id: 'prod-1' });
-      // Configurar mock específico para este teste
-      const selectChain = createMockChain([{ id: 'prod-1', name: 'Test Product', userId: mockUser.id }]);
+      const selectChain = createMockChain([baseProduct]);
       mockDb.select.mockReturnValueOnce(selectChain);
-      
+
       await getProductById(c);
 
       expect(mockDb.select).toHaveBeenCalled();
       expect(selectChain.from).toHaveBeenCalledWith(products);
-      expect(selectChain.where).toHaveBeenCalled();
+      expect(selectChain.where).toHaveBeenCalled(); // Onde a verificação de segurança ocorre
       expect(selectChain.limit).toHaveBeenCalledWith(1);
-      expect(c.json).toHaveBeenCalledWith(expect.objectContaining({ id: 'prod-1' }));
+      expect(c.json).toHaveBeenCalledWith(expect.objectContaining({ id: 'prod-1', userId: mockUser.id }));
     });
   });
 
   describe('createProduct', () => {
-    it('deve chamar db.insert.values.returning com o userId correto', async () => {
-      const newProduct = { name: 'New Product', price: 100 };
-      const c = createMockContext(newProduct);
-      // Configurar mock específico para este teste
-      const insertChain = createMockChain([{ id: 'prod-new', name: 'New Product', userId: mockUser.id }]);
-      mockDb.insert.mockReturnValueOnce(insertChain);
+    it('deve inserir dados usando chaves em camelCase e associar ao usuário', async () => {
+      // Input do Zod (já em camelCase conforme Step 2 e 4)
+      const newProductPayload = { name: 'New Product', price: 150 };
+      const c = createMockContext(newProductPayload);
       
+      const insertChain = createMockChain([{ ...baseProduct, id: 'prod-new', ...newProductPayload }]);
+      mockDb.insert.mockReturnValueOnce(insertChain);
+
       await createProduct(c);
 
       expect(mockDb.insert).toHaveBeenCalledWith(products);
+      // AQUI ESTÁ A CHAVE: O handler deve passar 'userId', não 'user_id'.
+      // O Drizzle fará o mapeamento interno para o banco.
       expect(insertChain.values).toHaveBeenCalledWith({
-        ...newProduct,
-        userId: mockUser.id,
+        ...newProductPayload,
+        userId: mockUser.id, 
       });
       expect(insertChain.returning).toHaveBeenCalled();
       expect(c.json).toHaveBeenCalledWith(
@@ -137,16 +149,17 @@ describe('Products Handlers', () => {
   });
 
   describe('updateProduct', () => {
-    it('deve chamar db.update.set.where.returning com o userId correto', async () => {
+    it('deve atualizar campos usando camelCase', async () => {
       const updatedValues = { name: 'Updated Product' };
       const c = createMockContext(updatedValues, { id: 'prod-1' });
-      // Configurar mock específico para este teste
-      const updateChain = createMockChain([{ id: 'prod-1', name: 'Updated Product', userId: mockUser.id }]);
+      
+      const updateChain = createMockChain([{ ...baseProduct, ...updatedValues }]);
       mockDb.update.mockReturnValueOnce(updateChain);
 
       await updateProduct(c);
 
       expect(mockDb.update).toHaveBeenCalledWith(products);
+      // Verifica se o handler passou apenas os dados necessários em camelCase
       expect(updateChain.set).toHaveBeenCalledWith(updatedValues);
       expect(updateChain.where).toHaveBeenCalled();
       expect(updateChain.returning).toHaveBeenCalled();
@@ -157,16 +170,15 @@ describe('Products Handlers', () => {
   });
 
   describe('deleteProduct', () => {
-    it('deve chamar db.delete.where.returning com o userId correto', async () => {
+    it('deve remover o produto garantindo a propriedade do usuário', async () => {
       const c = createMockContext(null, { id: 'prod-1' });
-      // Configurar mock específico para este teste
       const deleteChain = createMockChain([{ id: 'prod-1' }]);
       mockDb.delete.mockReturnValueOnce(deleteChain);
 
       await deleteProduct(c);
 
       expect(mockDb.delete).toHaveBeenCalledWith(products);
-      expect(deleteChain.where).toHaveBeenCalled();
+      expect(deleteChain.where).toHaveBeenCalled(); // Deve conter a cláusula AND userId = user.id
       expect(deleteChain.returning).toHaveBeenCalled();
       expect(c.json).toHaveBeenCalledWith({ message: 'Product deleted successfully' });
     });

@@ -1,33 +1,32 @@
 /**
  * @file /packages/api/src/features/products/products.handlers.ts
  * @overview Handlers da feature 'products', responsáveis pela lógica de negócios.
- * @description Esta é a implementação da lógica de CRUD para produtos,
- * migrada de 'src/shared/store.ts' para o backend.
- *
- * @see - Arquivo: /packages/api/src/features/clients/clients.handlers.ts (Usado como Templo)
- * @see - Features: appointments, clients, financial, products...
- * @see - De Onde: Lógica de src/shared/store.ts e src/worker/index.ts.
- * @see - Como: Todos os handlers devem usar sintaxe Drizzle (c.var.db) e aplicar user_id.
+ * @description Implementação CRUD seguindo o padrão ouro:
+ * - Banco: snake_case (gerenciado pelo Drizzle Schema)
+ * - Código: camelCase (Zod e TypeScript)
+ * - Tenancy: Obrigatório em todas as operações via user.id
  */
 
 import { Context } from 'hono';
-import { eq } from 'drizzle-orm';
+import { eq, and } from 'drizzle-orm'; // Importado 'and' para queries compostas seguras
 import { Variables } from '../../types';
-import { products } from '@db/schema'; // Assumindo que o schema do Módulo 2 está em 'db/schema'
+import { products } from '@db/schema'; 
 
 type HandlerContext = Context<{ Variables: Variables }>;
 
 /**
  * Handler para buscar todos os produtos do usuário logado.
- * @see (Padrão getClients)
  */
 export const getProducts = async (c: HandlerContext) => {
-  const user = c.var.user; // 
-  const data = await c.var.db.select() // 
+  const user = c.var.user;
+  
+  // O Drizzle retornará as chaves em camelCase automaticamente
+  // se o schema.ts (Passo 1) estiver configurado com alias.
+  const data = await c.var.db.select()
     .from(products)
-    .where(eq(products.userId, user.id)); // (Aplicação de Tenancy)
+    .where(eq(products.userId, user.id)); // Tenancy enforcement
 
-  return c.json(data); // 
+  return c.json(data);
 };
 
 /**
@@ -39,7 +38,11 @@ export const getProductById = async (c: HandlerContext) => {
 
   const data = await c.var.db.select()
     .from(products)
-    .where(eq(products.id, id) && eq(products.userId, user.id)) // 
+    // USO CORRETO: 'and()' em vez de '&&' para gerar SQL válido
+    .where(and(
+      eq(products.id, id),
+      eq(products.userId, user.id)
+    ))
     .limit(1);
 
   if (!data.length) {
@@ -50,20 +53,21 @@ export const getProductById = async (c: HandlerContext) => {
 
 /**
  * Handler para criar um novo produto.
- * @see (Padrão createClient)
+ * @description Recebe camelCase do Zod e passa direto para o Drizzle.
  */
 export const createProduct = async (c: HandlerContext) => {
-  const newProduct = c.req.valid('json'); // 
-  const user = c.var.user; // 
+  // 'newProduct' já vem em camelCase graças ao schema Zod (Passo 2)
+  const newProduct = c.req.valid('json'); 
+  const user = c.var.user;
 
-  const data = await c.var.db.insert(products) // 
+  const data = await c.var.db.insert(products)
     .values({
       ...newProduct,
-      userId: user.id // (Aplicação de Tenancy)
+      userId: user.id // Garante que o produto pertença ao usuário logado
     })
-    .returning(); // 
+    .returning();
 
-  return c.json(data[0], 201); // 
+  return c.json(data[0], 201);
 };
 
 /**
@@ -72,11 +76,15 @@ export const createProduct = async (c: HandlerContext) => {
 export const updateProduct = async (c: HandlerContext) => {
   const user = c.var.user;
   const { id } = c.req.param();
-  const updatedValues = c.req.valid('json');
+  // 'updatedValues' em camelCase (ex: { stockQuantity: 10 })
+  const updatedValues = c.req.valid('json'); 
 
   const data = await c.var.db.update(products)
-    .set(updatedValues)
-    .where(eq(products.id, id) && eq(products.userId, user.id)) // 
+    .set(updatedValues) // Drizzle mapeia automaticamente para snake_case no banco
+    .where(and(
+      eq(products.id, id),
+      eq(products.userId, user.id)
+    ))
     .returning();
 
   if (!data.length) {
@@ -93,7 +101,10 @@ export const deleteProduct = async (c: HandlerContext) => {
   const { id } = c.req.param();
 
   const data = await c.var.db.delete(products)
-    .where(eq(products.id, id) && eq(products.userId, user.id)) // 
+    .where(and(
+      eq(products.id, id),
+      eq(products.userId, user.id)
+    ))
     .returning();
 
   if (!data.length) {

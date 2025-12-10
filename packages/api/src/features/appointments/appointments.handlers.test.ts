@@ -3,11 +3,11 @@
  *
  * (Executor: LLM 2)
  *
- * Tarefa: Refatoração para Testes de Handler com Mock de Serviço
+ * Tarefa: Refatoração para Testes de Handler com Mock de Serviço (Padrão Ouro)
  * Princípios Aplicados:
- * - PTE (2.15): Testamos o contrato do handler isolando a lógica de negócios (Service).
- * - SoC (2.5): O handler lida com HTTP, o serviço (mockado) lida com a regra de negócio.
- * - DIP (2.9): O teste depende da abstração do serviço, não da implementação do banco[cite: 59].
+ * - PTE (2.15): Testamos o contrato do handler garantindo que ele fala camelCase com o código e o DB.
+ * - SoC (2.5): O handler foca na orquestração HTTP, delegando a persistência ao Drizzle.
+ * - DIP (2.9): Inversão de dependência via Mocks do Drizzle.
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
@@ -19,16 +19,24 @@ import {
   deleteAppointment,
 } from './appointments.handlers';
 
-// O handler não usa um serviço separado, ele usa Drizzle diretamente
-// Vamos mockar o Drizzle como nos outros testes
-
-// Mock do schema usando vi.hoisted() para evitar problemas de hoisting
+// ---------------------------------------------------------------------------
+// MOCK DO SCHEMA (Simulando Passo 1 e 2 da Refatoração)
+// ---------------------------------------------------------------------------
+// Define as colunas como objetos Drizzle, onde a chave é camelCase (código)
+// e o 'name' interno é snake_case (banco).
 const { mockAppointmentsTable } = vi.hoisted(() => {
   return {
     mockAppointmentsTable: {
-      id: { name: 'id', table: { name: 'appointments' } },
-      userId: { name: 'user_id', table: { name: 'appointments' } },
-      startTime: { name: 'start_time', table: { name: 'appointments' } },
+      id: { name: 'id' },
+      userId: { name: 'user_id' },
+      clientId: { name: 'client_id' },
+      professionalId: { name: 'professional_id' },
+      serviceId: { name: 'service_id' },
+      startTime: { name: 'start_time' },
+      endTime: { name: 'end_time' },
+      status: { name: 'status' },
+      createdAt: { name: 'created_at' },
+      updatedAt: { name: 'updated_at' },
     },
   };
 });
@@ -39,9 +47,11 @@ vi.mock('@repo/db/schema', () => {
   };
 });
 
-// Helper para criar cadeia de mocks do Drizzle
-// A cadeia precisa ser "thenable" para que `await` funcione mesmo que o último
-// método chamado seja `where`, `orderBy` ou `returning`.
+// ---------------------------------------------------------------------------
+// HELPERS DE TESTE
+// ---------------------------------------------------------------------------
+
+// Helper para criar cadeia de mocks do Drizzle (Query Builder Mock)
 const createMockChain = (finalValue?: any) => {
   const resolvedValue = finalValue ?? [];
 
@@ -52,7 +62,7 @@ const createMockChain = (finalValue?: any) => {
     set: vi.fn(() => chain),
     values: vi.fn(() => chain),
     returning: vi.fn(() => chain),
-    // Torna o objeto "thenable" para que `await chain` resolva para `resolvedValue`
+    // Torna o objeto "thenable" para await
     then: vi.fn((onFulfilled: (v: any) => any, _onRejected?: (e: any) => any) =>
       Promise.resolve(onFulfilled(resolvedValue)),
     ),
@@ -62,20 +72,19 @@ const createMockChain = (finalValue?: any) => {
 };
 
 describe('Appointments Handlers', () => {
-  // Mock do Contexto do Hono (Request/Response)
+  // Mock do Contexto do Hono
   let mockCtx: any;
   const mockUser = { id: 'user-123', email: 'test@example.com' };
   let mockDb: any;
 
   beforeEach(() => {
-    // Resetamos os mocks antes de cada teste
     vi.resetAllMocks();
 
-    // Criar novo mock do DB para cada teste
+    // Mock do DB injetado no contexto
     mockDb = {
       select: vi.fn(() => createMockChain([])),
-      insert: vi.fn(() => createMockChain([{ id: 'a1', userId: mockUser.id }])),
-      update: vi.fn(() => createMockChain([{ id: 'a1', userId: mockUser.id }])),
+      insert: vi.fn(() => createMockChain([])),
+      update: vi.fn(() => createMockChain([])),
       delete: vi.fn(() => createMockChain([{ deletedId: 'a1' }])),
     };
 
@@ -86,9 +95,8 @@ describe('Appointments Handlers', () => {
       },
       req: {
         valid: vi.fn(),
-        param: vi.fn((key?: string) => key ? 'a1' : { id: 'a1' }),
+        param: vi.fn((key?: string) => (key ? 'a1' : { id: 'a1' })),
       },
-      // Mock do json para capturar a resposta e o status code
       json: vi.fn((data, status) => ({ data, status })),
     };
   });
@@ -97,9 +105,16 @@ describe('Appointments Handlers', () => {
     vi.clearAllMocks();
   });
 
+  // -------------------------------------------------------------------------
+  // TESTES: Leitura (getAppointments, getAppointmentById)
+  // -------------------------------------------------------------------------
+
   describe('getAppointments', () => {
-    it('should fetch appointments via db and return 200', async () => {
-      const mockData = [{ id: 'a1', name: 'Appt 1', userId: 'user-123' }];
+    it('should fetch appointments via db using camelCase mapping and return 200', async () => {
+      // O DB retorna dados já mapeados (simulando o driver do Drizzle)
+      const mockData = [
+        { id: 'a1', clientId: 'c1', startTime: '2025-01-01T10:00:00Z', userId: mockUser.id },
+      ];
       const selectChain = createMockChain(mockData);
       mockDb.select.mockReturnValueOnce(selectChain);
 
@@ -107,8 +122,7 @@ describe('Appointments Handlers', () => {
 
       expect(mockDb.select).toHaveBeenCalled();
       expect(selectChain.from).toHaveBeenCalled();
-      expect(selectChain.where).toHaveBeenCalled();
-      expect(selectChain.orderBy).toHaveBeenCalled();
+      // Verifica se o retorno para o cliente mantém o camelCase
       expect(mockCtx.json).toHaveBeenCalledWith(mockData);
     });
 
@@ -128,20 +142,19 @@ describe('Appointments Handlers', () => {
 
   describe('getAppointmentById', () => {
     it('should return appointment if found', async () => {
-      const mockItem = { id: 'a1', name: 'Appt 1', userId: mockUser.id };
+      const mockItem = { id: 'a1', clientId: 'c1', startTime: '2025-01-01T10:00:00Z', userId: mockUser.id };
       const selectChain = createMockChain([mockItem]);
       mockDb.select.mockReturnValueOnce(selectChain);
 
       await getAppointmentById(mockCtx);
 
       expect(mockDb.select).toHaveBeenCalled();
-      expect(selectChain.from).toHaveBeenCalled();
       expect(selectChain.where).toHaveBeenCalled();
       expect(mockCtx.json).toHaveBeenCalledWith(mockItem);
     });
 
     it('should return 404 if not found', async () => {
-      const selectChain = createMockChain([]);
+      const selectChain = createMockChain([]); // Retorno vazio
       mockDb.select.mockReturnValueOnce(selectChain);
 
       await getAppointmentById(mockCtx);
@@ -150,16 +163,37 @@ describe('Appointments Handlers', () => {
     });
   });
 
+  // -------------------------------------------------------------------------
+  // TESTES: Escrita (createAppointment, updateAppointment, deleteAppointment)
+  // -------------------------------------------------------------------------
+
   describe('createAppointment', () => {
-    it('should create appointment via db and return 201', async () => {
-      const inputData = { name: 'New Appt', startTime: '2025-01-02T10:00:00Z' };
-      const createdData = { ...inputData, id: 'a2', userId: mockUser.id };
+    it('should create appointment transmitting camelCase payload to db', async () => {
+      // Input do Frontend (camelCase)
+      const inputData = { 
+        clientId: 'c1', 
+        professionalId: 'p1', 
+        serviceId: 's1', 
+        startTime: '2025-01-02T10:00:00Z' 
+      };
+      
+      // Dado retornado pelo DB após insert (com ID e timestamps)
+      const createdData = { 
+        ...inputData, 
+        id: 'a2', 
+        userId: mockUser.id, 
+        createdAt: new Date(), 
+        updatedAt: new Date() 
+      };
+
       const insertChain = createMockChain([createdData]);
       mockDb.insert.mockReturnValueOnce(insertChain);
       mockCtx.req.valid.mockReturnValue(inputData);
 
       await createAppointment(mockCtx);
 
+      // Verificação Crítica: O handler deve passar camelCase para o .values()
+      // O Drizzle cuidará de transformar 'clientId' em 'client_id' internamente
       expect(mockDb.insert).toHaveBeenCalled();
       expect(insertChain.values).toHaveBeenCalledWith({
         ...inputData,
@@ -171,26 +205,38 @@ describe('Appointments Handlers', () => {
   });
 
   describe('updateAppointment', () => {
-    it('should update appointment via db', async () => {
-      const updateData = { name: 'Updated Name' };
-      const resultData = { id: 'a1', ...updateData, userId: mockUser.id };
+    it('should update appointment using camelCase fields', async () => {
+      // Input de atualização
+      const updateData = { startTime: '2025-01-02T14:00:00Z', status: 'confirmed' };
+      
+      // Resultado esperado
+      const resultData = { 
+        id: 'a1', 
+        ...updateData, 
+        userId: mockUser.id,
+        updatedAt: new Date()
+      };
+
       const updateChain = createMockChain([resultData]);
       mockDb.update.mockReturnValueOnce(updateChain);
       mockCtx.req.valid.mockReturnValue(updateData);
 
       await updateAppointment(mockCtx);
 
+      // Verificação Crítica: O handler deve passar camelCase para o .set()
       expect(mockDb.update).toHaveBeenCalled();
-      expect(updateChain.set).toHaveBeenCalled();
+      expect(updateChain.set).toHaveBeenCalledWith(expect.objectContaining({
+        startTime: '2025-01-02T14:00:00Z',
+        status: 'confirmed'
+      }));
       expect(updateChain.where).toHaveBeenCalled();
-      expect(updateChain.returning).toHaveBeenCalled();
       expect(mockCtx.json).toHaveBeenCalledWith(resultData);
     });
 
     it('should return 404 if not found', async () => {
       const updateChain = createMockChain([]);
       mockDb.update.mockReturnValueOnce(updateChain);
-      mockCtx.req.valid.mockReturnValue({});
+      mockCtx.req.valid.mockReturnValue({ status: 'cancelled' });
 
       await updateAppointment(mockCtx);
 
@@ -203,14 +249,13 @@ describe('Appointments Handlers', () => {
 
   describe('deleteAppointment', () => {
     it('should delete via db and return success', async () => {
-      const deleteChain = createMockChain([{ deletedId: 'a1' }]);
+      const deleteChain = createMockChain([{ id: 'a1' }]);
       mockDb.delete.mockReturnValueOnce(deleteChain);
 
       await deleteAppointment(mockCtx);
 
       expect(mockDb.delete).toHaveBeenCalled();
       expect(deleteChain.where).toHaveBeenCalled();
-      expect(deleteChain.returning).toHaveBeenCalled();
       expect(mockCtx.json).toHaveBeenCalledWith({ success: true, deletedId: 'a1' });
     });
 

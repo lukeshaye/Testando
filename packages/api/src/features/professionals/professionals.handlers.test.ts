@@ -1,6 +1,5 @@
 import { vi, describe, it, expect, beforeEach, beforeAll, afterAll } from 'vitest';
 import { Context } from 'hono';
-import { eq, and } from 'drizzle-orm';
 import { professionals } from '@db/schema'; // Mocked
 import type { Variables } from '../../types';
 import type { AuthUser } from '../../core/auth.adapter';
@@ -12,24 +11,33 @@ import {
   deleteProfessional
 } from './professionals.handlers';
 
-// Mock dependencies - criar objeto mock que simula a estrutura Drizzle
+// ---------------------------------------------------------------------
+// Mock dependencies - Estrutura Drizzle "Padrão Ouro"
+// Simula o mapeamento camelCase (código) -> snake_case (banco)
+// ---------------------------------------------------------------------
 vi.mock('@db/schema', () => {
   const mockProfessionalsTable = {
+    // Colunas mapeadas explicitamente conforme Passo 1
     id: { name: 'id', table: { name: 'professionals' } },
     userId: { name: 'user_id', table: { name: 'professionals' } },
     name: { name: 'name', table: { name: 'professionals' } },
+    email: { name: 'email', table: { name: 'professionals' } },
+    phone: { name: 'phone', table: { name: 'professionals' } },
+    createdAt: { name: 'created_at', table: { name: 'professionals' } },
+    updatedAt: { name: 'updated_at', table: { name: 'professionals' } },
   };
   return {
     professionals: mockProfessionalsTable
   };
 });
 
-// Mock drizzle-orm operators to verify calls
+// Mock drizzle-orm operators
 vi.mock('drizzle-orm', async (importOriginal) => {
   const actual = await importOriginal<typeof import('drizzle-orm')>();
   return {
     ...actual,
     eq: vi.fn((col, val) => {
+      // Simula a geração de SQL usando o nome da coluna no banco (snake_case)
       const colName = typeof col === 'object' && col !== null && 'name' in col ? col.name : String(col);
       return `eq(${colName}, ${val})`;
     }),
@@ -45,7 +53,9 @@ vi.mock('drizzle-orm', async (importOriginal) => {
   };
 });
 
-// Mock data
+// ---------------------------------------------------------------------
+// Mock Data (Sempre em camelCase no lado do JS)
+// ---------------------------------------------------------------------
 const mockUser: AuthUser = {
   id: 'user-123',
   email: 'test@example.com',
@@ -53,26 +63,32 @@ const mockUser: AuthUser = {
 
 const mockProfessional = {
   id: 'prof-1',
-  userId: 'user-123',
+  userId: 'user-123', // camelCase property
   name: 'Dr. Test',
   email: 'test@prof.com',
   phone: '123456789',
-  createdAt: new Date(),
-  updatedAt: new Date(),
+  createdAt: new Date('2024-01-01'), // Audit field
+  updatedAt: new Date('2024-01-01'), // Audit field
 };
 
 const mockProfessionalsList = [mockProfessional];
 
-// Mocks for Drizzle chain 
+// ---------------------------------------------------------------------
+// Mocks for Drizzle Chain
+// ---------------------------------------------------------------------
 const mockReturning = vi.fn();
 const mockWhere = vi.fn();
+
 // update().set().where()
 const mockSet = vi.fn(() => ({ where: mockWhere }));
+
 // insert().values().returning()
 const mockValues = vi.fn(() => ({ returning: mockReturning }));
+
 // select().from().where()
 const mockFrom = vi.fn(() => ({ where: mockWhere }));
-// delete().where().returning() (handler adds returning)
+
+// delete().where().returning()
 const mockDeleteWhere = vi.fn(() => ({ returning: mockReturning }));
 const mockDelete = vi.fn(() => ({ where: mockDeleteWhere }));
 
@@ -93,14 +109,13 @@ const mockReq = {
 let mockContext: any;
 
 /**
- * Testes unitários para os handlers.
+ * Testes unitários para os handlers (Professionals).
  */
 describe('professionals.handlers', () => {
 
-  // Use fake timers to control 'new Date()' for update tests
   beforeAll(() => {
     vi.useFakeTimers();
-    vi.setSystemTime(new Date(2025, 0, 1));
+    vi.setSystemTime(new Date(2025, 0, 1)); // Mock current time for updatedAt tests
   });
 
   afterAll(() => {
@@ -108,30 +123,29 @@ describe('professionals.handlers', () => {
   });
 
   beforeEach(() => {
-    // Reset all mocks before each test
     vi.clearAllMocks();
 
-    // Reset context
     mockContext = {
       var: {
-        db: mockDb, // 
-        user: mockUser, // 
+        db: mockDb,
+        user: mockUser,
       },
       json: mockJson,
       req: mockReq,
     } as unknown as Context<{ Variables: Variables }>;
 
-    // Reset mock implementations
-    mockWhere.mockResolvedValue(mockProfessionalsList); // Default for GET
-    mockReturning.mockResolvedValue([mockProfessional]); // Default for C/U/D
-    mockDeleteWhere.mockResolvedValue({ returning: mockReturning }); // Default for Delete
+    // Default responses
+    mockWhere.mockResolvedValue(mockProfessionalsList); 
+    mockReturning.mockResolvedValue([mockProfessional]); 
+    mockDeleteWhere.mockResolvedValue({ returning: mockReturning });
   });
 
   it('getProfessionals should fetch professionals for the user', async () => {
     await getProfessionals(mockContext);
 
-    expect(mockDb.select).toHaveBeenCalled(); // 
+    expect(mockDb.select).toHaveBeenCalled();
     expect(mockFrom).toHaveBeenCalledWith(professionals);
+    // Verifica se a query usou a coluna 'user_id' (snake_case) vinda do schema mapeado
     expect(mockWhere).toHaveBeenCalledWith(`eq(user_id, ${mockUser.id})`);
     expect(mockJson).toHaveBeenCalledWith(mockProfessionalsList);
   });
@@ -143,13 +157,14 @@ describe('professionals.handlers', () => {
     await getProfessionalById(mockContext);
 
     expect(mockReq.param).toHaveBeenCalledWith('id');
+    // Verifica 'id' e 'user_id' (snake_case)
     expect(mockWhere).toHaveBeenCalledWith(`and(eq(id, prof-1), eq(user_id, ${mockUser.id}))`);
     expect(mockJson).toHaveBeenCalledWith(mockProfessional);
   });
 
   it('getProfessionalById should return 404 if not found', async () => {
     mockReq.param.mockReturnValue('prof-999');
-    mockWhere.mockResolvedValue([]); // Not found
+    mockWhere.mockResolvedValue([]); 
 
     await getProfessionalById(mockContext);
 
@@ -158,17 +173,21 @@ describe('professionals.handlers', () => {
   });
 
   it('createProfessional should create a new professional', async () => {
-    const newProfessionalInput = { name: 'New Prof', email: 'new@prof.com' };
+    const newProfessionalInput = { name: 'New Prof', email: 'new@prof.com', phone: '99999999' };
     mockReq.valid.mockReturnValue(newProfessionalInput);
 
     await createProfessional(mockContext);
 
     expect(mockReq.valid).toHaveBeenCalledWith('json');
-    expect(mockDb.insert).toHaveBeenCalledWith(professionals); // 
+    expect(mockDb.insert).toHaveBeenCalledWith(professionals);
+    
+    // Verifica se o objeto passado para values() está em camelCase (Passo 3)
+    // O Drizzle cuidará da conversão para snake_case internamente baseado no schema
     expect(mockValues).toHaveBeenCalledWith({
       ...newProfessionalInput,
-      userId: mockUser.id,
+      userId: mockUser.id, // camelCase
     });
+    
     expect(mockReturning).toHaveBeenCalled();
     expect(mockJson).toHaveBeenCalledWith(mockProfessional, 201);
   });
@@ -177,17 +196,21 @@ describe('professionals.handlers', () => {
     const updates = { name: 'Updated Name' };
     mockReq.param.mockReturnValue('prof-1');
     mockReq.valid.mockReturnValue(updates);
-    mockWhere.mockReturnValue({ returning: mockReturning }); // update().set().where().returning()
+    mockWhere.mockReturnValue({ returning: mockReturning }); 
 
     await updateProfessional(mockContext);
 
     expect(mockReq.param).toHaveBeenCalledWith('id');
     expect(mockReq.valid).toHaveBeenCalledWith('json');
     expect(mockDb.update).toHaveBeenCalledWith(professionals);
+    
+    // Verifica se o set() recebeu camelCase e incluiu updatedAt
     expect(mockSet).toHaveBeenCalledWith({
       ...updates,
-      updatedAt: new Date(), // Uses fake timer
+      updatedAt: new Date(), // Deve usar camelCase aqui também
     });
+    
+    // O where clause deve usar as colunas mapeadas (snake_case)
     expect(mockWhere).toHaveBeenCalledWith(`and(eq(id, prof-1), eq(user_id, ${mockUser.id}))`);
     expect(mockReturning).toHaveBeenCalled();
     expect(mockJson).toHaveBeenCalledWith(mockProfessional);
@@ -196,7 +219,6 @@ describe('professionals.handlers', () => {
   it('deleteProfessional should delete a professional', async () => {
     mockReq.param.mockReturnValue('prof-1');
     
-    // Configura o mock para a cadeia delete().where().returning()
     mockDeleteWhere.mockReturnValue({ returning: mockReturning });
     mockDelete.mockReturnValue({ where: mockDeleteWhere });
 
@@ -204,6 +226,8 @@ describe('professionals.handlers', () => {
 
     expect(mockReq.param).toHaveBeenCalledWith('id');
     expect(mockDb.delete).toHaveBeenCalledWith(professionals);
+    
+    // Verifica where clause com snake_case
     expect(mockDeleteWhere).toHaveBeenCalledWith(`and(eq(id, prof-1), eq(user_id, ${mockUser.id}))`);
     expect(mockReturning).toHaveBeenCalled();
     expect(mockJson).toHaveBeenCalledWith({ message: 'Professional deleted successfully' }, 200);

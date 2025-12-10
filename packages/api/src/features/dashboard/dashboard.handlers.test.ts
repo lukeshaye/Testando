@@ -1,49 +1,60 @@
 /**
  * /packages/api/src/features/dashboard/dashboard.handlers.test.ts
  *
- * Princípios:
- * - PTE (2.15): Testes isolados com mocks.
- * - DIP (2.9): Testa a injeção do DB e Auth.
+ * Princípios de Implementação:
+ * - PTE (2.15): Testabilidade Explícita - Testes unitários isolados com mocks.
+ * - DIP (2.9): Inversão de Dependência - Depende de abstrações (Schema/Context), não do DB real.
+ * - DRY (2.2): Reutilização da cadeia de mocks do Drizzle.
+ *
+ * Contexto da Refatoração (Padrão Ouro):
+ * - O Mock do Schema reflete a Camada 1 (DB snake_case -> TS camelCase).
+ * - Os testes validam se os handlers retornam JSON em camelCase (Camada 3).
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { getDashboardStats, getWeeklyChart } from './dashboard.handlers';
 import { Context } from 'hono';
 
-// Mock dos schemas do DB
+// [Passo 1 & 2] Mock dos schemas do DB refletindo a estrutura "Padrão Ouro"
+// Propriedades em camelCase (código) -> Colunas em snake_case (banco)
 vi.mock('@repo/db/schema', () => ({
   appointments: {
     userId: 'appointments.user_id',
     appointmentDate: 'appointments.appointment_date',
-    amount: 'appointments.price',
+    amount: 'appointments.price', // Mapeamento explícito se a coluna for 'price'
+    createdAt: 'appointments.created_at', // Coluna de auditoria obrigatória
+    updatedAt: 'appointments.updated_at', // Coluna de auditoria obrigatória
   },
   financialEntries: {
     userId: 'financial_entries.user_id',
     entryDate: 'financial_entries.entry_date',
     amount: 'financial_entries.amount',
     type: 'financial_entries.type',
+    createdAt: 'financial_entries.created_at', // Coluna de auditoria obrigatória
+    updatedAt: 'financial_entries.updated_at', // Coluna de auditoria obrigatória
   }
 }));
 
-// Helper para criar cadeia de mocks do Drizzle
+// Helper para criar cadeia de mocks do Drizzle (Simula Query Builder)
 const createMockChain = (resolvedValue: any) => {
   const chain: any = {
     from: vi.fn(() => chain),
     where: vi.fn(() => chain),
     groupBy: vi.fn(() => chain),
     orderBy: vi.fn(() => chain),
-    // Simula a resolução da Promise
+    limit: vi.fn(() => chain), // Adicionado caso seja usado
+    // Simula a resolução da Promise ao final da cadeia
     then: (resolve: any) => Promise.resolve(resolvedValue).then(resolve),
   };
   return chain;
 };
 
-// Mock do DB
+// Mock da Instância do DB
 const mockDb = {
   select: vi.fn(),
 };
 
-// Mock do Usuário
+// Mock do Usuário (Simulando Auth Middleware)
 const mockUser = { id: 'user-123' };
 
 // Mock do Contexto Hono
@@ -61,10 +72,11 @@ describe('Dashboard Handlers', () => {
   });
 
   describe('getDashboardStats', () => {
-    it('deve calcular KPIs corretamente (sucesso)', async () => {
+    it('deve calcular KPIs corretamente e retornar chaves em camelCase (sucesso)', async () => {
       const ctx = createMockContext();
 
       // Mock da Query 1 (Earnings)
+      // O DB retorna valores brutos, o handler calcula a lógica
       const mockEarningsResult = [{ total: 5000 }]; // 5000 centavos
       const earningsChain = createMockChain(mockEarningsResult);
 
@@ -79,10 +91,10 @@ describe('Dashboard Handlers', () => {
 
       await getDashboardStats(ctx);
 
-      // Verifica as chamadas ao DB
+      // Validação PTE (2.15): Verifica interações
       expect(mockDb.select).toHaveBeenCalledTimes(2);
       
-      // Verifica o retorno JSON calculado
+      // Validação de Contrato (Passo 3): O retorno deve ser estritamente camelCase
       // Ticket Médio: 5000 / 5 = 1000
       expect(ctx.json).toHaveBeenCalledWith({
         dailyEarnings: 5000,
@@ -108,9 +120,11 @@ describe('Dashboard Handlers', () => {
   });
 
   describe('getWeeklyChart', () => {
-    it('deve retornar dados do gráfico formatados', async () => {
+    it('deve retornar dados do gráfico formatados em camelCase', async () => {
       const ctx = createMockContext();
 
+      // [Passo 3] O Handler agora deve retornar objetos já em camelCase,
+      // pois o Drizzle faz o mapeamento automático baseado no Schema.
       const mockChartData = [
         { date: '2023-10-01', amount: 1000 },
         { date: '2023-10-02', amount: 2000 },
@@ -125,6 +139,7 @@ describe('Dashboard Handlers', () => {
       expect(chartChain.from).toHaveBeenCalled();
       expect(chartChain.groupBy).toHaveBeenCalled();
       
+      // Garante que o frontend receberá camelCase limpo
       expect(ctx.json).toHaveBeenCalledWith([
         { date: '2023-10-01', amount: 1000 },
         { date: '2023-10-02', amount: 2000 },

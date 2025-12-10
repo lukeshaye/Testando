@@ -1,27 +1,20 @@
 /**
  * /packages/api/src/features/financial/financial.handlers.ts
  *
- * (Executor: Implementação Tática)
+ * (Executor: Implementação Tática - Passo 3 Refatoração)
  *
- * Este arquivo contém os handlers (controladores) para a feature 'financial'.
- * A lógica de negócios (queries) é implementada aqui, seguindo as diretrizes do plano.
- *
- * Princípios Aplicados:
- * - DIP (2.9) / Pilar 2: Os handlers dependem da abstração c.var.db (Drizzle injetado),
- * não de um cliente Supabase específico.
- * - DSpP (2.16) / Pilar 13: A lógica de RLS/Tenancy (isolamento por usuário) é
- * aplicada em todas as queries usando o c.var.user.id.
- * - SoC (2.5): Este arquivo foca exclusivamente na lógica de manipulação dos
- * dados (handlers), separado do roteamento e validação (routes.ts).
+ * Atualizado para suportar o padrão CamelCase <-> SnakeCase automático.
+ * * Princípios Aplicados:
+ * - DIP (2.9): Injeção do DB via Context.
+ * - DSpP (2.16): RLS/Tenancy via user.id em todas as queries.
+ * - DRY (2.2) & KISS (2.3): Sem conversão manual de dados; confia no Drizzle/Zod.
  */
 
 import type { Context } from 'hono';
 import { Variables } from '../../types';
 import { eq, desc, and } from 'drizzle-orm';
-// Importa o schema Drizzle (Módulo 2)
+// O schema agora exporta as chaves em camelCase (ex: userId) mapeadas para colunas snake_case (user_id)
 import { financialTransactions } from '@db/schema';
-// A validação Zod (Módulo 1) é aplicada em .routes.ts
-// Os handlers recebem o dado validado via c.req.valid('json')
 
 // Define o tipo do Contexto com as Variáveis injetadas para type safety
 type FinancialContext = Context<{ Variables: Variables }>;
@@ -38,12 +31,14 @@ export const getFinancialTransactions = async (c: FinancialContext) => {
     const data = await db
       .select()
       .from(financialTransactions)
+      // A chave agora é .userId (camelCase) vinda do schema atualizado
       .where(eq(financialTransactions.userId, user.id))
-      .orderBy(desc(financialTransactions.date)); // Ordenação padrão
+      .orderBy(desc(financialTransactions.date)); 
 
     return c.json(data);
   } catch (error) {
     // (PTE 2.15) Error handling básico
+    console.error('Error fetching transactions:', error);
     return c.json({ error: 'Failed to fetch transactions' }, 500);
   }
 };
@@ -74,6 +69,7 @@ export const getFinancialTransactionById = async (c: FinancialContext) => {
 
     return c.json(data[0]);
   } catch (error) {
+    console.error('Error fetching transaction by ID:', error);
     return c.json({ error: 'Failed to fetch transaction' }, 500);
   }
 };
@@ -85,6 +81,9 @@ export const getFinancialTransactionById = async (c: FinancialContext) => {
 export const createFinancialTransaction = async (c: FinancialContext) => {
   const db = c.var.db;
   const user = c.var.user;
+  
+  // O payload já está em camelCase (validado pelo Zod no Passo 2)
+  // Ex: { amount: 100, paymentMethod: 'pix', ... }
   const newTransaction = c.req.valid('json');
 
   try {
@@ -92,12 +91,14 @@ export const createFinancialTransaction = async (c: FinancialContext) => {
       .insert(financialTransactions)
       .values({
         ...newTransaction,
-        userId: user.id, // RLS/Tenancy
+        userId: user.id, // Garante associação ao usuário logado
       })
       .returning();
 
+    // O retorno do Drizzle também será em camelCase automaticamente (Passo 1)
     return c.json(data[0], 201);
   } catch (error) {
+    console.error('Error creating transaction:', error);
     return c.json({ error: 'Failed to create transaction' }, 500);
   }
 };
@@ -110,12 +111,14 @@ export const updateFinancialTransaction = async (c: FinancialContext) => {
   const db = c.var.db;
   const user = c.var.user;
   const { id } = c.req.param();
+  
+  // Payload em camelCase
   const updatedValues = c.req.valid('json');
 
   try {
     const data = await db
       .update(financialTransactions)
-      .set(updatedValues)
+      .set(updatedValues) // Drizzle mapeia automaticamente camelCase -> snake_case
       .where(
         and(
           eq(financialTransactions.id, id),
@@ -130,6 +133,7 @@ export const updateFinancialTransaction = async (c: FinancialContext) => {
 
     return c.json(data[0]);
   } catch (error) {
+    console.error('Error updating transaction:', error);
     return c.json({ error: 'Failed to update transaction' }, 500);
   }
 };
@@ -160,6 +164,7 @@ export const deleteFinancialTransaction = async (c: FinancialContext) => {
 
     return c.json(data[0]);
   } catch (error) {
+    console.error('Error deleting transaction:', error);
     return c.json({ error: 'Failed to delete transaction' }, 500);
   }
 };

@@ -1,12 +1,13 @@
 /**
  * /packages/api/src/features/dashboard/dashboard.handlers.ts
  *
- * (Executor: Implementação da Feature Dashboard)
+ * (Executor: Implementação da Feature Dashboard - Refatorado para Padrão Ouro)
  *
  * Responsabilidade: Lógica de negócios para cálculo de KPIs e Gráficos.
  * Princípios:
  * - DIP (2.9): Usa c.var.db (Drizzle) e c.var.user.
  * - Tenancy (2.16): Filtra estritamente por user.id.
+ * - Clean Code (2.2/2.3): Uso de camelCase conforme Passo 3 do refactor.
  */
 
 import { Context } from 'hono';
@@ -29,12 +30,12 @@ export const getDashboardStats = async (c: HandlerContext) => {
   const startOfDay = new Date(now.setHours(0, 0, 0, 0));
   const endOfDay = new Date(now.setHours(23, 59, 59, 999));
   
-  // Para financial_entries (tipo date YYYY-MM-DD)
+  // Para financialEntries (Drizzle mapeia 'entry_date' para 'entryDate') [cite: 1]
   const todayString = startOfDay.toISOString().split('T')[0];
 
   try {
     // 1. Calcular Faturamento do Dia (Financial Entries)
-    // Soma apenas entradas do tipo 'receita' para a data de hoje
+    // Refatorado: Acessa propriedades em camelCase (userId, entryDate, type)
     const earningsResult = await db
       .select({ 
         total: sql<number>`sum(${financialEntries.amount})` 
@@ -42,8 +43,8 @@ export const getDashboardStats = async (c: HandlerContext) => {
       .from(financialEntries)
       .where(
         and(
-          eq(financialEntries.userId, user.id),
-          eq(financialEntries.entryDate, todayString),
+          eq(financialEntries.userId, user.id),    // Mapeamento automático de user_id
+          eq(financialEntries.entryDate, todayString), // Mapeamento automático de entry_date
           eq(financialEntries.type, 'receita')
         )
       );
@@ -51,6 +52,7 @@ export const getDashboardStats = async (c: HandlerContext) => {
     const dailyEarnings = Number(earningsResult[0]?.total) || 0;
 
     // 2. Contar Agendamentos do Dia (Appointments)
+    // Refatorado: Acessa propriedades em camelCase (userId, appointmentDate)
     const appointmentsResult = await db
       .select({ 
         count: sql<number>`count(*)` 
@@ -58,7 +60,7 @@ export const getDashboardStats = async (c: HandlerContext) => {
       .from(appointments)
       .where(
         and(
-          eq(appointments.userId, user.id),
+          eq(appointments.userId, user.id), // Tenancy enforcement [cite: 113]
           gte(appointments.appointmentDate, startOfDay),
           lte(appointments.appointmentDate, endOfDay)
         )
@@ -71,6 +73,7 @@ export const getDashboardStats = async (c: HandlerContext) => {
       ? Math.round(dailyEarnings / appointmentsCount) 
       : 0;
 
+    // Retorno em camelCase para o Frontend (Passo 4)
     return c.json({
       dailyEarnings,
       attendedAppointments: appointmentsCount,
@@ -98,9 +101,10 @@ export const getWeeklyChart = async (c: HandlerContext) => {
 
   try {
     // Agrega as receitas por dia
+    // Nota: O Drizzle faz o map de 'entry_date' para 'entryDate' automaticamente
     const chartData = await db
       .select({
-        date: financialEntries.entryDate,
+        date: financialEntries.entryDate, // camelCase no select
         amount: sql<number>`sum(${financialEntries.amount})`.mapWith(Number)
       })
       .from(financialEntries)
@@ -115,12 +119,10 @@ export const getWeeklyChart = async (c: HandlerContext) => {
       .orderBy(financialEntries.entryDate);
 
     // Formata o retorno para o frontend
-    // O frontend espera: { date: string, amount: number, dayLabel: string }
-    // O dayLabel pode ser tratado no front, aqui retornamos os dados brutos.
+    // Garante que o objeto final tenha chaves em camelCase
     const formattedData = chartData.map(item => ({
       date: item.date,
       amount: item.amount || 0,
-      // dayLabel será gerado no frontend via date-fns/Intl
     }));
 
     return c.json(formattedData);

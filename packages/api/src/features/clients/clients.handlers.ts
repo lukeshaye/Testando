@@ -1,54 +1,40 @@
 /**
  * @file /packages/api/src/features/clients/clients.handlers.ts
- * 
- * Contém os handlers Hono (lógica de controller) para a feature 'clients'.
- * Esta lógica foi movida de 'src/shared/store.ts' (legado). 
+ * * Contém os handlers Hono para a feature 'clients'.
+ * Refatorado para o padrão camelCase (Aplicação) <-> snake_case (Banco).
  */
 
 import type { Context } from 'hono';
-// Importa operadores Drizzle (eq, and) para RLS
 import { eq, and } from 'drizzle-orm';
 
-// Importa os tipos de contexto Hono (Injeção de Dependência)
 import type { Bindings, Variables } from '@api/types';
 
-// Importa o schema da DB (Módulo 2)
-// (O Executor assume que o Módulo 2 exportou os schemas para
-// um local importável, ex: @api/db-schema)
+// Importa o schema da DB (já configurado com mapeamento no Passo 1)
 import { clients } from '@db/schema';
 
-// Importa os tipos Zod (Módulo 1)
-// (O Executor assume que o Módulo 1 exportou os tipos Zod para
-// um local importável, ex: @api/schemas)
+// Importa os tipos Zod (já em camelCase conforme Passo 2)
 import type { CreateClient } from '@api/schemas';
 
-/**
- * Define o tipo de contexto padrão para os handlers desta API,
- * garantindo o type safety para c.var (db, authAdapter, user).
- */
 type AppContext = Context<{
   Bindings: Bindings;
   Variables: Variables;
 }>;
 
-// Exporta funções de handler
-
 /**
  * Handler para GET /api/clients
- * Busca todos os clientes pertencentes ao usuário autenticado.
+ * Retorna objetos em camelCase automaticamente via Drizzle.
  */
 export const getClients = async (c: AppContext) => {
-  const user = c.var.user; // 
+  const user = c.var.user;
 
   try {
-    // Usa c.var.db (Drizzle)
     const data = await c.var.db
       .select()
       .from(clients)
-      // Aplica RLS/Tenancy (Pilar 13)
+      // O Drizzle converte automaticamente 'userId' (schema) para 'user_id' (SQL)
       .where(eq(clients.userId, user.id));
 
-    return c.json(data); // 
+    return c.json(data);
   } catch (e: any) {
     console.error(`[clients.handlers:getClients]: ${e.message}`);
     return c.json({ error: 'Failed to fetch clients' }, 500);
@@ -57,25 +43,25 @@ export const getClients = async (c: AppContext) => {
 
 /**
  * Handler para POST /api/clients
- * Cria um novo cliente associado ao usuário autenticado.
+ * Recebe camelCase (Zod), grava via Drizzle (mapeamento auto).
  */
 export const createClient = async (c: AppContext) => {
-  // Obtém os dados validados pelo zValidator
+  // 'newClient' já está em camelCase e validado pelo Zod
   const newClient = c.req.valid('json') as CreateClient;
-  const user = c.var.user; // 
+  const user = c.var.user;
 
   try {
-    // Usa c.var.db (Drizzle)
     const data = await c.var.db
       .insert(clients)
-      // Associa o ID do usuário (Tenancy)
       .values({
         ...newClient,
-        userId: user.id,
+        // Injeção de dependência do User ID (Tenancy)
+        // Usa a propriedade em camelCase definida no Schema
+        userId: user.id, 
       })
-      .returning(); // 
+      .returning();
 
-    return c.json(data[0], 201); // 
+    return c.json(data[0], 201);
   } catch (e: any) {
     console.error(`[clients.handlers:createClient]: ${e.message}`);
     return c.json({ error: 'Failed to create client' }, 500);
@@ -84,19 +70,15 @@ export const createClient = async (c: AppContext) => {
 
 /**
  * Handler para GET /api/clients/:id
- * Busca um cliente específico pelo ID, garantindo que ele pertença
- * ao usuário autenticado.
  */
 export const getClientById = async (c: AppContext) => {
   const { id } = c.req.param();
-  const user = c.var.user; // 
+  const user = c.var.user;
 
   try {
-    // Usa c.var.db (Drizzle)
     const data = await c.var.db
       .select()
       .from(clients)
-      // Aplica RLS/Tenancy (Pilar 13)
       .where(and(eq(clients.id, id), eq(clients.userId, user.id)));
 
     if (data.length === 0) {
@@ -112,21 +94,19 @@ export const getClientById = async (c: AppContext) => {
 
 /**
  * Handler para PUT /api/clients/:id
- * Atualiza um cliente específico, garantindo que ele pertença
- * ao usuário autenticado.
+ * Recebe payload parcial ou total em camelCase e atualiza.
  */
 export const updateClient = async (c: AppContext) => {
   const { id } = c.req.param();
-  // Obtém os dados validados pelo zValidator
-  const updatedClient = c.req.valid('json') as CreateClient;
-  const user = c.var.user; // 
+  // 'updatedClient' deve estar em camelCase (Zod)
+  const updatedClient = c.req.valid('json') as Partial<CreateClient>;
+  const user = c.var.user;
 
   try {
-    // Usa c.var.db (Drizzle)
     const data = await c.var.db
       .update(clients)
+      // O Drizzle mapeia as chaves camelCase do objeto para as colunas snake_case
       .set(updatedClient)
-      // Aplica RLS/Tenancy (Pilar 13)
       .where(and(eq(clients.id, id), eq(clients.userId, user.id)))
       .returning();
 
@@ -143,18 +123,14 @@ export const updateClient = async (c: AppContext) => {
 
 /**
  * Handler para DELETE /api/clients/:id
- * Deleta um cliente específico, garantindo que ele pertença
- * ao usuário autenticado.
  */
 export const deleteClient = async (c: AppContext) => {
   const { id } = c.req.param();
-  const user = c.var.user; // 
+  const user = c.var.user;
 
   try {
-    // Usa c.var.db (Drizzle)
     const data = await c.var.db
       .delete(clients)
-      // Aplica RLS/Tenancy (Pilar 13)
       .where(and(eq(clients.id, id), eq(clients.userId, user.id)))
       .returning({ id: clients.id });
 
