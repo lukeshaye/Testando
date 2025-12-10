@@ -9,32 +9,23 @@ import {
   date,
   time,
   numeric,
-  relations,
-  primaryKey,
-  foreignKey,
   index,
 } from 'drizzle-orm/pg-core';
-import { relations as drizzleRelations } from 'drizzle-orm';
+import { relations } from 'drizzle-orm';
 
 // --- ENUMS ---
-// [cite: 57]
 export const financialTypeEnum = pgEnum('financial_type', ['receita', 'despesa']);
-// [cite: 57]
 export const financialEntryTypeEnum = pgEnum('financial_entry_type', [
   'pontual',
   'fixa',
 ]);
-// [cite: 52]
 export const genderEnum = pgEnum('gender', ['masculino', 'feminino', 'outro']);
 
-// --- TABELA DE AUTENTICAÇÃO (Externa) ---
-// [cite: 51]
-// Definindo a tabela auth.users para que possamos referenciá-la em chaves estrangeiras.
+// --- TABELA DE AUTENTICAÇÃO (Externa / Supabase) ---
 export const users = pgTable(
   'users',
   {
     id: text('id').primaryKey(),
-    // ... outros campos do auth.users se necessário para consulta, mas o ID é o suficiente para FKs
   },
   (table) => {
     return {
@@ -45,7 +36,7 @@ export const users = pgTable(
 
 // --- TABELAS PRINCIPAIS ---
 
-// Tabela de Clientes [cite: 52]
+// Tabela de Clientes
 export const clients = pgTable(
   'clients',
   {
@@ -59,13 +50,17 @@ export const clients = pgTable(
     notes: text('notes'),
     birthDate: date('birth_date'),
     gender: genderEnum('gender'),
+    
+    // Auditoria
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+    updatedAt: timestamp('updated_at').defaultNow().notNull(),
   },
   (table) => ({
     userIdx: index('clients_user_id_idx').on(table.userId),
   }),
 );
 
-// Tabela de Profissionais [cite: 53]
+// Tabela de Profissionais
 export const professionals = pgTable(
   'professionals',
   {
@@ -74,20 +69,24 @@ export const professionals = pgTable(
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
     name: text('name').notNull(),
-color: text('color'), // [cite: 53]
-salary: integer('salary'), // [cite: 53] (em centavos)
-commissionRate: numeric('commission_rate'), // [cite: 53]
-workStartTime: time('work_start_time'), // [cite: 53]
-workEndTime: time('work_end_time'), // [cite: 53]
-lunchStartTime: time('lunch_start_time'), // [cite: 53]
-lunchEndTime: time('lunch_end_time'), // [cite: 53]
+    color: text('color'),
+    salary: integer('salary'), // em centavos
+    commissionRate: numeric('commission_rate'),
+    workStartTime: time('work_start_time'),
+    workEndTime: time('work_end_time'),
+    lunchStartTime: time('lunch_start_time'),
+    lunchEndTime: time('lunch_end_time'),
+
+    // Auditoria
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+    updatedAt: timestamp('updated_at').defaultNow().notNull(),
   },
   (table) => ({
     userIdx: index('professionals_user_id_idx').on(table.userId),
   }),
 );
 
-// Tabela de Serviços [cite: 54]
+// Tabela de Serviços
 export const services = pgTable(
   'services',
   {
@@ -97,16 +96,20 @@ export const services = pgTable(
       .references(() => users.id, { onDelete: 'cascade' }),
     name: text('name').notNull(),
     description: text('description'),
-price: integer('price').notNull(), // [cite: 54] (em centavos)
-duration: integer('duration').notNull(), // [cite: 54] (em minutos)
-color: text('color'), // [cite: 54]
+    price: integer('price').notNull(), // em centavos
+    duration: integer('duration').notNull(), // em minutos
+    color: text('color'),
+
+    // Auditoria
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+    updatedAt: timestamp('updated_at').defaultNow().notNull(),
   },
   (table) => ({
     userIdx: index('services_user_id_idx').on(table.userId),
   }),
 );
 
-// Tabela de Produtos [cite: 55]
+// Tabela de Produtos
 export const products = pgTable(
   'products',
   {
@@ -116,16 +119,20 @@ export const products = pgTable(
       .references(() => users.id, { onDelete: 'cascade' }),
     name: text('name').notNull(),
     description: text('description'),
-price: integer('price').notNull(), // [cite: 55] (em centavos)
-quantity: integer('quantity').notNull(), // [cite: 55]
-imageUrl: text('image_url'), // [cite: 55]
+    price: integer('price').notNull(), // em centavos
+    quantity: integer('quantity').notNull(),
+    imageUrl: text('image_url'),
+
+    // Auditoria
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+    updatedAt: timestamp('updated_at').defaultNow().notNull(),
   },
   (table) => ({
     userIdx: index('products_user_id_idx').on(table.userId),
   }),
 );
 
-// Tabela de Agendamentos [cite: 56]
+// Tabela de Agendamentos
 export const appointments = pgTable(
   'appointments',
   {
@@ -135,29 +142,32 @@ export const appointments = pgTable(
       .references(() => users.id, { onDelete: 'cascade' }),
     clientId: integer('client_id')
       .notNull()
-.references(() => clients.id, { onDelete: 'set null' }), // [cite: 56]
+      .references(() => clients.id, { onDelete: 'set null' }),
     professionalId: integer('professional_id')
       .notNull()
-.references(() => professionals.id, { onDelete: 'set null' }), // [cite: 56]
+      .references(() => professionals.id, { onDelete: 'set null' }),
     serviceId: integer('service_id')
       .notNull()
-.references(() => services.id, { onDelete: 'set null' }), // [cite: 56]
-price: integer('price').notNull(), // [cite: 56] (em centavos)
-appointmentDate: timestamp('appointment_date', { withTimezone: true }).notNull(), // [cite: 56]
-endDate: timestamp('end_date', { withTimezone: true }).notNull(), // [cite: 56]
-attended: boolean('attended').default(false), // [cite: 56]
+      .references(() => services.id, { onDelete: 'set null' }),
+    
+    price: integer('price').notNull(), // em centavos
+    appointmentDate: timestamp('appointment_date', { withTimezone: true }).notNull(),
+    endDate: timestamp('end_date', { withTimezone: true }).notNull(),
+    attended: boolean('attended').default(false),
+
+    // Auditoria
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+    updatedAt: timestamp('updated_at').defaultNow().notNull(),
   },
   (table) => ({
     userIdx: index('appointments_user_id_idx').on(table.userId),
     clientIdIdx: index('appointments_client_id_idx').on(table.clientId),
-    professionalIdIdx: index('appointments_professional_id_idx').on(
-      table.professionalId,
-    ),
+    professionalIdIdx: index('appointments_professional_id_idx').on(table.professionalId),
     serviceIdIdx: index('appointments_service_id_idx').on(table.serviceId),
   }),
 );
 
-// Tabela de Lançamentos Financeiros [cite: 57]
+// Tabela de Lançamentos Financeiros
 export const financialEntries = pgTable(
   'financial_entries',
   {
@@ -166,23 +176,25 @@ export const financialEntries = pgTable(
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
     description: text('description').notNull(),
-amount: integer('amount').notNull(), // [cite: 57] (em centavos)
-type: financialTypeEnum('type').notNull(), // [cite: 57]
-entryType: financialEntryTypeEnum('entry_type').notNull(), // [cite: 57]
-entryDate: date('entry_date').notNull(), // [cite: 57]
+    amount: integer('amount').notNull(), // em centavos
+    type: financialTypeEnum('type').notNull(),
+    entryType: financialEntryTypeEnum('entry_type').notNull(),
+    entryDate: date('entry_date').notNull(),
     appointmentId: integer('appointment_id').references(() => appointments.id, {
       onDelete: 'set null',
-}), // [cite: 57]
+    }),
+
+    // Auditoria
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+    updatedAt: timestamp('updated_at').defaultNow().notNull(),
   },
   (table) => ({
     userIdx: index('financial_entries_user_id_idx').on(table.userId),
-    appointmentIdIdx: index('financial_entries_appointment_id_idx').on(
-      table.appointmentId,
-    ),
+    appointmentIdIdx: index('financial_entries_appointment_id_idx').on(table.appointmentId),
   }),
 );
 
-// --- TABELAS DE CONFIGURAÇÃO --- [cite: 58]
+// --- TABELAS DE CONFIGURAÇÃO ---
 
 // Configurações do Negócio
 export const businessSettings = pgTable('business_settings', {
@@ -194,9 +206,13 @@ export const businessSettings = pgTable('business_settings', {
   workEndTime: time('work_end_time'),
   lunchStartTime: time('lunch_start_time'),
   lunchEndTime: time('lunch_end_time'),
+
+  // Auditoria
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
 });
 
-// Exceções do Negócio (dias fechados, horários especiais)
+// Exceções do Negócio
 export const businessExceptions = pgTable('business_exceptions', {
   id: serial('id').primaryKey(),
   userId: text('user_id')
@@ -208,6 +224,10 @@ export const businessExceptions = pgTable('business_exceptions', {
   lunchStartTime: time('lunch_start_time'),
   lunchEndTime: time('lunch_end_time'),
   isClosed: boolean('is_closed').default(false),
+
+  // Auditoria
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
 });
 
 // Horários Padrão dos Profissionais
@@ -219,11 +239,15 @@ export const professionalSchedules = pgTable('professional_schedules', {
   professionalId: integer('professional_id')
     .notNull()
     .references(() => professionals.id, { onDelete: 'cascade' }),
-  dayOfWeek: integer('day_of_week').notNull(), // 0 = Domingo, 1 = Segunda, etc.
+  dayOfWeek: integer('day_of_week').notNull(), // 0 = Domingo, 1 = Segunda...
   workStartTime: time('work_start_time'),
   workEndTime: time('work_end_time'),
   lunchStartTime: time('lunch_start_time'),
   lunchEndTime: time('lunch_end_time'),
+
+  // Auditoria
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
 });
 
 // Exceções de Horário dos Profissionais
@@ -241,9 +265,13 @@ export const professionalExceptions = pgTable('professional_exceptions', {
   lunchStartTime: time('lunch_start_time'),
   lunchEndTime: time('lunch_end_time'),
   isOff: boolean('is_off').default(false),
+
+  // Auditoria
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
 });
 
-// Ausências/Férias dos Profissionais [cite: 58]
+// Ausências/Férias dos Profissionais
 export const professionalAbsences = pgTable('professional_absences', {
   id: serial('id').primaryKey(),
   userId: text('user_id')
@@ -255,15 +283,19 @@ export const professionalAbsences = pgTable('professional_absences', {
   startDate: date('start_date').notNull(),
   endDate: date('end_date').notNull(),
   reason: text('reason'),
+
+  // Auditoria
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
 });
 
-// --- RELAÇÕES (DRIZZLE) --- [cite: 59]
+// --- RELAÇÕES (DRIZZLE) ---
 
-export const clientsRelations = drizzleRelations(clients, ({ many }) => ({
+export const clientsRelations = relations(clients, ({ many }) => ({
   appointments: many(appointments),
 }));
 
-export const professionalsRelations = drizzleRelations(
+export const professionalsRelations = relations(
   professionals,
   ({ many }) => ({
     appointments: many(appointments),
@@ -273,11 +305,11 @@ export const professionalsRelations = drizzleRelations(
   }),
 );
 
-export const servicesRelations = drizzleRelations(services, ({ many }) => ({
+export const servicesRelations = relations(services, ({ many }) => ({
   appointments: many(appointments),
 }));
 
-export const appointmentsRelations = drizzleRelations(
+export const appointmentsRelations = relations(
   appointments,
   ({ one, many }) => ({
     client: one(clients, {
@@ -296,7 +328,7 @@ export const appointmentsRelations = drizzleRelations(
   }),
 );
 
-export const financialEntriesRelations = drizzleRelations(
+export const financialEntriesRelations = relations(
   financialEntries,
   ({ one }) => ({
     appointment: one(appointments, {
@@ -306,7 +338,7 @@ export const financialEntriesRelations = drizzleRelations(
   }),
 );
 
-export const professionalSchedulesRelations = drizzleRelations(
+export const professionalSchedulesRelations = relations(
   professionalSchedules,
   ({ one }) => ({
     professional: one(professionals, {
@@ -316,7 +348,7 @@ export const professionalSchedulesRelations = drizzleRelations(
   }),
 );
 
-export const professionalExceptionsRelations = drizzleRelations(
+export const professionalExceptionsRelations = relations(
   professionalExceptions,
   ({ one }) => ({
     professional: one(professionals, {
@@ -326,7 +358,7 @@ export const professionalExceptionsRelations = drizzleRelations(
   }),
 );
 
-export const professionalAbsencesRelations = drizzleRelations(
+export const professionalAbsencesRelations = relations(
   professionalAbsences,
   ({ one }) => ({
     professional: one(professionals, {

@@ -5,17 +5,18 @@ import {
 } from './professional.schema';
 
 describe('CreateProfessionalSchema', () => {
+  // Refatorado para camelCase
   const validCreateData = {
     name: 'Dr. Roberta',
     email: 'roberta@example.com',
     phone: '11987654321',
     color: '#FF00FF',
     salary: 5000.5,
-    commission_rate: 10.5,
-    work_start_time: '09:00',
-    work_end_time: '18:00',
-    lunch_start_time: '12:00',
-    lunch_end_time: '13:00',
+    commissionRate: 10.5,     // De commission_rate para commissionRate
+    workStartTime: '09:00',   // De work_start_time para workStartTime
+    workEndTime: '18:00',     // De work_end_time para workEndTime
+    lunchStartTime: '12:00',  // De lunch_start_time para lunchStartTime
+    lunchEndTime: '13:00',    // De lunch_end_time para lunchEndTime
   };
 
   it('deve validar dados de criação de profissional com sucesso', () => {
@@ -26,8 +27,8 @@ describe('CreateProfessionalSchema', () => {
   it('deve permitir campos de tempo nulos', () => {
     const dataWithNullTimes = {
       ...validCreateData,
-      work_start_time: null,
-      lunch_start_time: null,
+      workStartTime: null,   // Atualizado
+      lunchStartTime: null,  // Atualizado
     };
     const result = CreateProfessionalSchema.safeParse(dataWithNullTimes);
     expect(result.success).toBe(true);
@@ -66,35 +67,35 @@ describe('CreateProfessionalSchema', () => {
   });
 
   it('deve falhar se a comissão for negativa', () => {
-    const invalidData = { ...validCreateData, commission_rate: -1 };
+    const invalidData = { ...validCreateData, commissionRate: -1 }; // Atualizado
     const result = CreateProfessionalSchema.safeParse(invalidData);
     expect(result.success).toBe(false);
     expect(result.error?.issues[0].message).toBe('Comissão não pode ser negativa');
   });
 
   it('deve falhar se a comissão for maior que 100', () => {
-    const invalidData = { ...validCreateData, commission_rate: 101 };
+    const invalidData = { ...validCreateData, commissionRate: 101 }; // Atualizado
     const result = CreateProfessionalSchema.safeParse(invalidData);
     expect(result.success).toBe(false);
     expect(result.error?.issues[0].message).toBe('Comissão não pode exceder 100');
   });
 
-  it('deve falhar se work_start_time tiver formato HH:MM inválido (hora)', () => {
-    const invalidData = { ...validCreateData, work_start_time: '24:00' };
+  it('deve falhar se workStartTime tiver formato HH:MM inválido (hora)', () => {
+    const invalidData = { ...validCreateData, workStartTime: '24:00' }; // Atualizado
     const result = CreateProfessionalSchema.safeParse(invalidData);
     expect(result.success).toBe(false);
     expect(result.error?.issues[0].message).toBe('Formato HH:MM inválido');
   });
 
-  it('deve falhar se lunch_start_time tiver formato HH:MM inválido (minuto)', () => {
-    const invalidData = { ...validCreateData, lunch_start_time: '12:60' };
+  it('deve falhar se lunchStartTime tiver formato HH:MM inválido (minuto)', () => {
+    const invalidData = { ...validCreateData, lunchStartTime: '12:60' }; // Atualizado
     const result = CreateProfessionalSchema.safeParse(invalidData);
     expect(result.success).toBe(false);
     expect(result.error?.issues[0].message).toBe('Formato HH:MM inválido');
   });
 
-  it('deve falhar se work_end_time tiver formato HH:MM inválido (formato)', () => {
-    const invalidData = { ...validCreateData, work_end_time: '9:00' };
+  it('deve falhar se workEndTime tiver formato HH:MM inválido (formato)', () => {
+    const invalidData = { ...validCreateData, workEndTime: '9:00' }; // Atualizado
     const result = CreateProfessionalSchema.safeParse(invalidData);
     expect(result.success).toBe(false);
     expect(result.error?.issues[0].message).toBe('Formato HH:MM inválido');
@@ -102,6 +103,7 @@ describe('CreateProfessionalSchema', () => {
 });
 
 describe('ProfessionalSchema', () => {
+  // Refatorado para camelCase
   const validProfessionalData = {
     id: 1,
     name: 'Carlos Lima',
@@ -109,13 +111,13 @@ describe('ProfessionalSchema', () => {
     phone: null,
     color: '#00FF00',
     salary: 4500,
-    commission_rate: 15,
-    work_start_time: '08:30',
-    work_end_time: '17:30',
-    lunch_start_time: '11:30',
-    lunch_end_time: '12:30',
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
+    commissionRate: 15,       // De commission_rate para commissionRate
+    workStartTime: '08:30',   // De work_start_time para workStartTime
+    workEndTime: '17:30',     // De work_end_time para workEndTime
+    lunchStartTime: '11:30',  // De lunch_start_time para lunchStartTime
+    lunchEndTime: '12:30',    // De lunch_end_time para lunchEndTime
+    createdAt: new Date().toISOString(), // De created_at para createdAt
+    updatedAt: new Date().toISOString(), // De updated_at para updatedAt
   };
 
   it('deve validar um profissional completo com sucesso', () => {
@@ -132,8 +134,8 @@ describe('ProfessionalSchema', () => {
     );
   });
 
-  it('deve falhar se created_at for inválido', () => {
-    const invalidData = { ...validProfessionalData, created_at: 'ontem' };
+  it('deve falhar se createdAt for inválido', () => {
+    const invalidData = { ...validProfessionalData, createdAt: 'ontem' }; // Atualizado
     const result = ProfessionalSchema.safeParse(invalidData);
     expect(result.success).toBe(false);
     expect(result.error?.issues[0].message).toBe('Data de criação inválida');

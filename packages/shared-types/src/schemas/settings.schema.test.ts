@@ -5,12 +5,13 @@ import {
 } from './settings.schema'
 
 describe('BusinessHoursSchema', () => {
+  // Refatorado para camelCase conforme Passo 2 do plano
   const validBusinessHour = {
     id: 1,
-    day_of_week: 1, // Segunda-feira
-    start_time: '09:00',
-    end_time: '18:00',
-    company_id: 'uuid-company-1',
+    dayOfWeek: 1, // Anteriormente: day_of_week
+    startTime: '09:00', // Anteriormente: start_time
+    endTime: '18:00',   // Anteriormente: end_time
+    companyId: 'uuid-company-1', // Anteriormente: company_id
   }
 
   it('should validate a correct business hour entry', () => {
@@ -18,46 +19,46 @@ describe('BusinessHoursSchema', () => {
     expect(result.success).toBe(true)
   })
 
-  it('should accept null start_time and end_time', () => {
+  it('should accept null startTime and endTime', () => {
     const result = BusinessHoursSchema.safeParse({
       ...validBusinessHour,
-      start_time: null,
-      end_time: null,
+      startTime: null,
+      endTime: null,
     })
     expect(result.success).toBe(true)
   })
 
-  it('should fail if day_of_week is less than 0', () => {
+  it('should fail if dayOfWeek is less than 0', () => {
     const result = BusinessHoursSchema.safeParse({
       ...validBusinessHour,
-      day_of_week: -1,
+      dayOfWeek: -1,
     })
     expect(result.success).toBe(false)
     expect(result.error.issues[0].message).toContain('mínimo 0')
   })
 
-  it('should fail if day_of_week is greater than 6', () => {
+  it('should fail if dayOfWeek is greater than 6', () => {
     const result = BusinessHoursSchema.safeParse({
       ...validBusinessHour,
-      day_of_week: 7,
+      dayOfWeek: 7,
     })
     expect(result.success).toBe(false)
     expect(result.error.issues[0].message).toContain('máximo 6')
   })
 
-  it('should fail if start_time has invalid time format (regex)', () => {
+  it('should fail if startTime has invalid time format (regex)', () => {
     const result = BusinessHoursSchema.safeParse({
       ...validBusinessHour,
-      start_time: '25:00',
+      startTime: '25:00',
     })
     expect(result.success).toBe(false)
     expect(result.error.issues[0].message).toContain('Formato HH:MM inválido')
   })
 
-  it('should fail if end_time has invalid time format (regex)', () => {
+  it('should fail if endTime has invalid time format (regex)', () => {
     const result = BusinessHoursSchema.safeParse({
       ...validBusinessHour,
-      end_time: '18:60',
+      endTime: '18:60',
     })
     expect(result.success).toBe(false)
     expect(result.error.issues[0].message).toContain('Formato HH:MM inválido')
@@ -65,13 +66,14 @@ describe('BusinessHoursSchema', () => {
 })
 
 describe('BusinessExceptionSchema', () => {
+  // Refatorado para camelCase conforme Passo 2 do plano
   const validException = {
     id: 1,
-    exception_date: '2025-12-25',
+    exceptionDate: '2025-12-25', // Anteriormente: exception_date
     description: 'Natal',
-    start_time: '10:00',
-    end_time: '14:00',
-    company_id: 'uuid-company-1',
+    startTime: '10:00', // Anteriormente: start_time
+    endTime: '14:00',   // Anteriormente: end_time
+    companyId: 'uuid-company-1', // Anteriormente: company_id
   }
 
   it('should validate a correct business exception entry', () => {
@@ -79,10 +81,10 @@ describe('BusinessExceptionSchema', () => {
     expect(result.success).toBe(true)
   })
 
-  it('should fail if exception_date is not a valid date string', () => {
+  it('should fail if exceptionDate is not a valid date string', () => {
     const result = BusinessExceptionSchema.safeParse({
       ...validException,
-      exception_date: '2025-13-01', // Mês inválido
+      exceptionDate: '2025-13-01', // Mês inválido
     })
     expect(result.success).toBe(false)
     expect(result.error.issues[0].message).toContain('Data inválida')
@@ -97,19 +99,19 @@ describe('BusinessExceptionSchema', () => {
     expect(result.error.issues[0].message).toContain('Descrição é obrigatória')
   })
 
-  it('should fail if start_time has invalid time format (regex)', () => {
+  it('should fail if startTime has invalid time format (regex)', () => {
     const result = BusinessExceptionSchema.safeParse({
       ...validException,
-      start_time: 'abc',
+      startTime: 'abc',
     })
     expect(result.success).toBe(false)
     expect(result.error.issues[0].message).toContain('Formato HH:MM inválido')
   })
 
-  it('should fail if end_time has invalid time format (regex)', () => {
+  it('should fail if endTime has invalid time format (regex)', () => {
     const result = BusinessExceptionSchema.safeParse({
       ...validException,
-      end_time: '09:99',
+      endTime: '09:99',
     })
     expect(result.success).toBe(false)
     expect(result.error.issues[0].message).toContain('Formato HH:MM inválido')

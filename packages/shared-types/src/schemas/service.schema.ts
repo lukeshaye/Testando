@@ -2,7 +2,8 @@ import { z } from 'zod';
 
 /**
  * Schema para criação de um novo serviço.
- * Não inclui 'id' pois é gerado pelo banco de dados.
+ * Não inclui 'id' nem campos de auditoria pois são gerados pelo banco.
+ * Segue o Princípio 2.2 (DRY) centralizando as regras de validação.
  */
 export const CreateServiceSchema = z.object({
   name: z.string().min(1, { message: 'Nome é obrigatório' }),
@@ -16,15 +17,19 @@ export const CreateServiceSchema = z.object({
     .regex(/^#[0-9a-fA-F]{6}$/, {
       message: 'Cor deve estar no formato hexadecimal (ex: #FFFFFF)',
     }),
-  // commission_rate não foi especificado no plano para este schema
+  // Se no futuro for necessário adicionar 'commission_rate', 
+  // deve ser adicionado aqui como 'commissionRate' (camelCase).
 });
 
 /**
- * Schema completo do serviço, incluindo 'id'.
- * Representa o objeto como ele existe no banco de dados.
+ * Schema completo do serviço, incluindo 'id' e auditoria.
+ * Representa o objeto como ele existe no banco de dados, mas com chaves em camelCase.
+ * Alinhado com o Passo 1 (Colunas de Auditoria).
  */
 export const ServiceSchema = CreateServiceSchema.extend({
   id: z.number().int().positive(),
+  createdAt: z.date(),
+  updatedAt: z.date(),
 });
 
 // Tipos inferidos para uso no frontend e backend

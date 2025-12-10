@@ -3,12 +3,13 @@ import { CreateFinancialEntrySchema } from './financial.schema';
 
 // Testes focados em falhas de validação (PTE 2.15)
 describe('CreateFinancialEntrySchema', () => {
+  // Atualizado para camelCase conforme Passo 2 do plano de refatoração
   const validEntry = {
     description: 'Venda de produto',
     amount: 150.5,
     type: 'receita',
-    entry_type: 'pontual',
-    entry_date: new Date('2025-11-04'),
+    entryType: 'pontual', // Refatorado: entry_type -> entryType
+    entryDate: new Date('2025-11-04'), // Refatorado: entry_date -> entryDate
   };
 
   it('deve validar um lançamento financeiro correto', () => {
@@ -29,7 +30,6 @@ describe('CreateFinancialEntrySchema', () => {
   });
 
   it('deve falhar se o valor (amount) for negativo', () => {
-    // 
     const invalidEntry = { ...validEntry, amount: -100 };
     const result = CreateFinancialEntrySchema.safeParse(invalidEntry);
     expect(result.success).toBe(false);
@@ -53,21 +53,21 @@ describe('CreateFinancialEntrySchema', () => {
   });
 
   it('deve falhar se o "type" for um valor de enum inválido', () => {
-    // 
     const invalidEntry = { ...validEntry, type: 'investimento' };
     const result = CreateFinancialEntrySchema.safeParse(invalidEntry);
     expect(result.success).toBe(false);
   });
 
-  it('deve falhar se o "entry_type" for um valor de enum inválido', () => {
-    // 
-    const invalidEntry = { ...validEntry, entry_type: 'recorrente' };
+  it('deve falhar se o "entryType" for um valor de enum inválido', () => {
+    // Refatorado: entry_type -> entryType
+    const invalidEntry = { ...validEntry, entryType: 'recorrente' };
     const result = CreateFinancialEntrySchema.safeParse(invalidEntry);
     expect(result.success).toBe(false);
   });
 
   it('deve falhar se a data for inválida', () => {
-    const invalidEntry = { ...validEntry, entry_date: 'data-invalida' };
+    // Refatorado: entry_date -> entryDate
+    const invalidEntry = { ...validEntry, entryDate: 'data-invalida' };
     const result = CreateFinancialEntrySchema.safeParse(invalidEntry);
     expect(result.success).toBe(false);
     if (!result.success) {
@@ -76,15 +76,17 @@ describe('CreateFinancialEntrySchema', () => {
   });
 
   it('deve converter uma string de data válida para Date (coerce)', () => {
+    // Refatorado: entry_date -> entryDate
     const entryWithDateString = {
       ...validEntry,
-      entry_date: '2025-11-04T12:00:00.000Z',
+      entryDate: '2025-11-04T12:00:00.000Z',
     };
     const result = CreateFinancialEntrySchema.safeParse(entryWithDateString);
     expect(result.success).toBe(true);
     if (result.success) {
-      expect(result.data.entry_date).toBeInstanceOf(Date);
-      expect(result.data.entry_date.toISOString()).toBe(
+      // Refatorado: entry_date -> entryDate nas asserções
+      expect(result.data.entryDate).toBeInstanceOf(Date);
+      expect(result.data.entryDate.toISOString()).toBe(
         '2025-11-04T12:00:00.000Z',
       );
     }

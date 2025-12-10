@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { LoginSchema } from './auth.schema'
 
 describe('LoginSchema', () => {
+  // Princípio 2.2 (DRY): Mantemos uma fonte de verdade para um login válido
   const validLogin = {
     email: 'test@example.com',
     password: 'password123',
@@ -17,8 +18,11 @@ describe('LoginSchema', () => {
       ...validLogin,
       email: 'invalid-email.com',
     })
+    
     expect(result.success).toBe(false)
-    expect(result.error.issues[0].message).toBe('Email inválido.')
+    if (!result.success) {
+      expect(result.error.issues[0].message).toBe('Email inválido.')
+    }
   })
 
   it('should fail if password is too short (5 characters)', () => {
@@ -26,10 +30,13 @@ describe('LoginSchema', () => {
       ...validLogin,
       password: '12345',
     })
+
     expect(result.success).toBe(false)
-    expect(result.error.issues[0].message).toBe(
-      'A senha deve ter pelo menos 6 caracteres.',
-    )
+    if (!result.success) {
+      expect(result.error.issues[0].message).toBe(
+        'A senha deve ter pelo menos 6 caracteres.',
+      )
+    }
   })
 
   it('should fail if email is empty', () => {
@@ -37,8 +44,11 @@ describe('LoginSchema', () => {
       ...validLogin,
       email: '',
     })
+
     expect(result.success).toBe(false)
-    expect(result.error.issues[0].message).toBe('Email inválido.')
+    if (!result.success) {
+      expect(result.error.issues[0].message).toBe('Email inválido.')
+    }
   })
 
   it('should fail if password is empty', () => {
@@ -46,9 +56,12 @@ describe('LoginSchema', () => {
       ...validLogin,
       password: '',
     })
+
     expect(result.success).toBe(false)
-    expect(result.error.issues[0].message).toBe(
-      'A senha deve ter pelo menos 6 caracteres.',
-    )
+    if (!result.success) {
+      expect(result.error.issues[0].message).toBe(
+        'A senha deve ter pelo menos 6 caracteres.',
+      )
+    }
   })
 })

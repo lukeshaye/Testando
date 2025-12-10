@@ -3,12 +3,14 @@ import { AppointmentFormSchema, AppointmentSchema } from './appointment.schema';
 
 describe('Appointment Schemas', () => {
   const baseDate = new Date();
+  
+  // Refatorado para camelCase conforme Passo 2 (O Contrato)
   const validFormData = {
-    client_id: 1,
-    professional_id: 2,
-    service_id: 3,
-    appointment_date: baseDate,
-    end_date: new Date(baseDate.getTime() + 30 * 60000), // 30 minutos depois
+    clientId: 1,
+    professionalId: 2,
+    serviceId: 3,
+    appointmentDate: baseDate,
+    endDate: new Date(baseDate.getTime() + 30 * 60000), // 30 minutos depois
     price: 100.0,
     notes: 'Cliente pediu para não usar secador.',
   };
@@ -16,8 +18,8 @@ describe('Appointment Schemas', () => {
   const validDbData = {
     ...validFormData,
     id: 1,
-    created_at: new Date(),
-    updated_at: new Date(),
+    createdAt: new Date(), // Padrão Ouro: camelCase no código
+    updatedAt: new Date(), // Padrão Ouro: camelCase no código
   };
 
   // --- Testes para AppointmentFormSchema ---
@@ -27,57 +29,57 @@ describe('Appointment Schemas', () => {
       expect(result.success).toBe(true);
     });
 
-    it('should fail if end_date is before appointment_date (.refine)', () => {
+    it('should fail if endDate is before appointmentDate (.refine)', () => {
       const invalidData = {
         ...validFormData,
-        end_date: new Date(baseDate.getTime() - 30 * 60000), // 30 minutos antes
+        endDate: new Date(baseDate.getTime() - 30 * 60000), // 30 minutos antes
       };
       const result = AppointmentFormSchema.safeParse(invalidData);
       expect(result.success).toBe(false);
-      // Verifica se o erro está no 'path' [end_date] conforme o .refine
+      // Atualizado para verificar o path em camelCase
       expect(
-        result.error.issues.some((issue) => issue.path.includes('end_date')),
+        result.error.issues.some((issue) => issue.path.includes('endDate')),
       ).toBe(true);
     });
 
-    it('should fail if client_id is not a positive number', () => {
-      const invalidData = { ...validFormData, client_id: 0 };
+    it('should fail if clientId is not a positive number', () => {
+      const invalidData = { ...validFormData, clientId: 0 };
       const result = AppointmentFormSchema.safeParse(invalidData);
       expect(result.success).toBe(false);
       expect(
-        result.error.issues.some((issue) => issue.path.includes('client_id')),
+        result.error.issues.some((issue) => issue.path.includes('clientId')),
       ).toBe(true);
     });
 
-    it('should fail if professional_id is not a positive number', () => {
-      const invalidData = { ...validFormData, professional_id: -1 };
+    it('should fail if professionalId is not a positive number', () => {
+      const invalidData = { ...validFormData, professionalId: -1 };
       const result = AppointmentFormSchema.safeParse(invalidData);
       expect(result.success).toBe(false);
       expect(
         result.error.issues.some((issue) =>
-          issue.path.includes('professional_id'),
+          issue.path.includes('professionalId'),
         ),
       ).toBe(true);
     });
 
-    it('should fail if service_id is not a positive number', () => {
-      const invalidData = { ...validFormData, service_id: 0 };
+    it('should fail if serviceId is not a positive number', () => {
+      const invalidData = { ...validFormData, serviceId: 0 };
       const result = AppointmentFormSchema.safeParse(invalidData);
       expect(result.success).toBe(false);
       expect(
-        result.error.issues.some((issue) => issue.path.includes('service_id')),
+        result.error.issues.some((issue) => issue.path.includes('serviceId')),
       ).toBe(true);
     });
 
     it('should fail if any ID is not a number', () => {
       const invalidData = {
         ...validFormData,
-        client_id: '1' as any, // Força o tipo errado
+        clientId: '1' as any, // Força o tipo errado
       };
       const result = AppointmentFormSchema.safeParse(invalidData);
       expect(result.success).toBe(false);
       expect(
-        result.error.issues.some((issue) => issue.path.includes('client_id')),
+        result.error.issues.some((issue) => issue.path.includes('clientId')),
       ).toBe(true);
     });
 
@@ -90,16 +92,16 @@ describe('Appointment Schemas', () => {
       ).toBe(true);
     });
 
-    it('should fail if appointment_date is not a valid date', () => {
+    it('should fail if appointmentDate is not a valid date', () => {
       const invalidData = {
         ...validFormData,
-        appointment_date: 'não é uma data' as any,
+        appointmentDate: 'não é uma data' as any,
       };
       const result = AppointmentFormSchema.safeParse(invalidData);
       expect(result.success).toBe(false);
       expect(
         result.error.issues.some((issue) =>
-          issue.path.includes('appointment_date'),
+          issue.path.includes('appointmentDate'),
         ),
       ).toBe(true);
     });
@@ -107,7 +109,7 @@ describe('Appointment Schemas', () => {
 
   // --- Testes para AppointmentSchema ---
   describe('AppointmentSchema', () => {
-    it('should validate a full appointment object (e.g., from DB)', () => {
+    it('should validate a full appointment object (e.g., from DB mapped to camelCase)', () => {
       const result = AppointmentSchema.safeParse(validDbData);
       expect(result.success).toBe(true);
     });
@@ -125,12 +127,12 @@ describe('Appointment Schemas', () => {
     it('should still enforce the .refine() rule', () => {
       const invalidData = {
         ...validDbData,
-        end_date: new Date(baseDate.getTime() - 1), // 1ms antes
+        endDate: new Date(baseDate.getTime() - 1), // 1ms antes
       };
       const result = AppointmentSchema.safeParse(invalidData);
       expect(result.success).toBe(false);
       expect(
-        result.error.issues.some((issue) => issue.path.includes('end_date')),
+        result.error.issues.some((issue) => issue.path.includes('endDate')),
       ).toBe(true);
     });
   });

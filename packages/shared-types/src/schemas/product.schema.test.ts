@@ -3,19 +3,20 @@ import { CreateProductSchema, ProductSchema } from './product.schema';
 
 describe('Product Schemas', () => {
   // Dados válidos para 'CreateProductSchema'
+  // Refatorado para camelCase conforme Passo 2 (Padrão Ouro)
   const validCreateData = {
     name: 'Shampoo Antiqueda',
     price: 59.9,
     quantity: 100,
-    image_url: 'https://example.com/images/shampoo.png',
+    imageUrl: 'https://example.com/images/shampoo.png', // Alterado de image_url para imageUrl
   };
 
-  // Dados válidos para 'ProductSchema' (simulando retorno do DB)
+  // Dados válidos para 'ProductSchema' (simulando retorno do DB já transformado pelo Drizzle)
   const validProductData = {
     ...validCreateData,
     id: 1,
-    created_at: new Date(),
-    updated_at: new Date(),
+    createdAt: new Date(), // Alterado de created_at para createdAt
+    updatedAt: new Date(), // Alterado de updated_at para updatedAt
   };
 
   // --- Testes para CreateProductSchema ---
@@ -25,18 +26,21 @@ describe('Product Schemas', () => {
       expect(result.success).toBe(true);
     });
 
-    it('should allow an empty string for image_url', () => {
-      const data = { ...validCreateData, image_url: '' };
+    it('should allow an empty string for imageUrl', () => {
+      // Alterado de image_url para imageUrl
+      const data = { ...validCreateData, imageUrl: '' };
       const result = CreateProductSchema.safeParse(data);
       expect(result.success).toBe(true);
     });
 
-    it('should fail validation for an invalid image_url', () => {
-      const data = { ...validCreateData, image_url: 'not-a-valid-url' };
+    it('should fail validation for an invalid imageUrl', () => {
+      // Alterado de image_url para imageUrl
+      const data = { ...validCreateData, imageUrl: 'not-a-valid-url' };
       const result = CreateProductSchema.safeParse(data);
       expect(result.success).toBe(false);
+      // Verificação do path ajustada para camelCase
       expect(
-        result.error.issues.some((issue) => issue.path.includes('image_url')),
+        result.error.issues.some((issue) => issue.path.includes('imageUrl')),
       ).toBe(true);
     });
 
@@ -103,12 +107,14 @@ describe('Product Schemas', () => {
       ).toBe(true);
     });
 
-    it('should fail validation for an invalid image_url', () => {
-      const data = { ...validProductData, image_url: 'ftp://invalid-url.com' };
+    it('should fail validation for an invalid imageUrl', () => {
+      // Alterado de image_url para imageUrl
+      const data = { ...validProductData, imageUrl: 'ftp://invalid-url.com' };
       const result = ProductSchema.safeParse(data);
       expect(result.success).toBe(false);
+      // Verificação do path ajustada para camelCase
       expect(
-        result.error.issues.some((issue) => issue.path.includes('image_url')),
+        result.error.issues.some((issue) => issue.path.includes('imageUrl')),
       ).toBe(true);
     });
   });

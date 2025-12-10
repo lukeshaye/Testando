@@ -4,7 +4,6 @@ import { z } from 'zod';
 // Aplicação do Princípio 2.2 (DRY - Don't Repeat Yourself)
 // ---------------------------------------------------------------------------
 // A regex é definida uma única vez como uma constante autoritativa. 
-// Isso evita a duplicação da lógica de validação de horário em múltiplos pontos do schema.
 // Formato aceito: HH:MM (ex: 08:00, 23:59).
 // Regex estrito: exige 2 dígitos para hora (rejeita "9:00", exige "09:00")
 // Princípio 2.16 (DSpP): Zero Trust - rejeita formatos ambíguos
@@ -17,21 +16,22 @@ const TIME_ERROR_MESSAGE = 'Formato HH:MM inválido';
 export const BusinessHoursSchema = z.object({
   id: z.number().int().positive().optional(),
   
-  day_of_week: z
+  // Refatorado para camelCase (antes: day_of_week)
+  dayOfWeek: z
     .number({ invalid_type_error: "O dia da semana deve ser um número." })
     .int("O dia da semana deve ser um número inteiro.")
     .min(0, "O dia deve ser no mínimo 0 (Domingo).")
     .max(6, "O dia deve ser no máximo 6 (Sábado)."),
     
   // Aplicação do Princípio 2.16 (DSpP - Design Seguro por Padrão)
-  // Validação estrita na entrada ("zero trust"). Garante que o dado só entra
-  // se estiver perfeitamente formatado, prevenindo erros de runtime.
-  start_time: z
+  // Refatorado para camelCase (antes: start_time)
+  startTime: z
     .string()
     .regex(TIME_REGEX, TIME_ERROR_MESSAGE)
     .nullable(),
     
-  end_time: z
+  // Refatorado para camelCase (antes: end_time)
+  endTime: z
     .string()
     .regex(TIME_REGEX, TIME_ERROR_MESSAGE)
     .nullable(),
@@ -43,9 +43,9 @@ export const BusinessHoursSchema = z.object({
 export const BusinessExceptionSchema = z.object({
   id: z.number().int().positive().optional(),
   
+  // Refatorado para camelCase (antes: exception_date)
   // Mantido z.string().date() para validação estrita do formato ISO (YYYY-MM-DD).
-  // Evita o uso de coerce.date() que poderia aceitar strings ambíguas.
-  exception_date: z
+  exceptionDate: z
     .string({ required_error: "A data da exceção é obrigatória." })
     .date("Data inválida"), 
     
@@ -54,13 +54,15 @@ export const BusinessExceptionSchema = z.object({
     .min(1, { message: 'Descrição é obrigatória' }),
     
   // Reutilização da constante TIME_REGEX (Princípio 2.2)
-  start_time: z
+  // Refatorado para camelCase (antes: start_time)
+  startTime: z
     .string()
     .regex(TIME_REGEX, TIME_ERROR_MESSAGE)
     .nullable()
     .optional(),
     
-  end_time: z
+  // Refatorado para camelCase (antes: end_time)
+  endTime: z
     .string()
     .regex(TIME_REGEX, TIME_ERROR_MESSAGE)
     .nullable()

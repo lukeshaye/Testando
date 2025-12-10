@@ -7,11 +7,11 @@ describe('ClientSchema', () => {
     name: 'João da Silva',
     email: 'joao.silva@example.com',
     phone: '11999998888',
-    birth_date: '1990-01-15', // Ajustado para formato YYYY-MM-DD (Date string simples)
-    gender: 'masculino', // Valores aceitos: 'masculino', 'feminino', 'outro'
-    how_found: 'indicação',
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
+    birthDate: '1990-01-15', // Atualizado para camelCase (antes: birth_date)
+    gender: 'masculino',
+    howFound: 'indicação',   // Atualizado para camelCase (antes: how_found)
+    createdAt: new Date().toISOString(), // Atualizado para camelCase (antes: created_at)
+    updatedAt: new Date().toISOString(), // Atualizado para camelCase (antes: updated_at)
   };
 
   it('deve validar um cliente completo com sucesso', () => {
@@ -44,7 +44,7 @@ describe('ClientSchema', () => {
 
     const invalidData = {
       ...validClientData,
-      birth_date: futureDateString,
+      birthDate: futureDateString, // Atualizado para camelCase
     };
     const result = ClientSchema.safeParse(invalidData);
     expect(result.success).toBe(false);
@@ -66,9 +66,9 @@ describe('CreateClientSchema', () => {
     name: 'Maria Souza',
     email: 'maria.souza@example.com',
     phone: '21988887777',
-    birth_date: '1985-05-20', // Ajustado para formato YYYY-MM-DD
-    gender: 'feminino', // Valores aceitos: 'masculino', 'feminino', 'outro'
-    how_found: 'google',
+    birthDate: '1985-05-20', // Atualizado para camelCase (antes: birth_date)
+    gender: 'feminino',
+    howFound: 'google',      // Atualizado para camelCase (antes: how_found)
   };
 
   it('deve validar dados de criação de cliente com sucesso', () => {

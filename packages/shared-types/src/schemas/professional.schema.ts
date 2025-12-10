@@ -6,7 +6,8 @@ export const TIME_REGEX = /^([01][0-9]|2[0-3]):[0-5][0-9]$/;
 
 /**
  * Schema para criação de um novo profissional.
- * Não inclui campos gerenciados pelo banco (id, created_at, updated_at).
+ * Não inclui campos gerenciados pelo banco (id, createdAt, updatedAt).
+ * Refatorado para camelCase conforme Passo 2 do plano de implementação.
  */
 export const CreateProfessionalSchema = z.object({
   name: z.string().min(1, 'Nome do profissional é obrigatório'),
@@ -23,25 +24,26 @@ export const CreateProfessionalSchema = z.object({
     .number()
     .positive({ message: 'Salário deve ser um valor positivo' }),
   
-  commission_rate: z.coerce
+  // Refatorado: commission_rate -> commissionRate
+  commissionRate: z.coerce
     .number()
     .min(0, 'Comissão não pode ser negativa')
     .max(100, 'Comissão não pode exceder 100'),
 
-  // Campos de horário de trabalho
-  work_start_time: z
+  // Campos de horário de trabalho (Refatorado para camelCase)
+  workStartTime: z
     .string()
     .regex(TIME_REGEX, { message: 'Formato HH:MM inválido' })
     .nullable(),
-  work_end_time: z
+  workEndTime: z
     .string()
     .regex(TIME_REGEX, { message: 'Formato HH:MM inválido' })
     .nullable(),
-  lunch_start_time: z
+  lunchStartTime: z
     .string()
     .regex(TIME_REGEX, { message: 'Formato HH:MM inválido' })
     .nullable(),
-  lunch_end_time: z
+  lunchEndTime: z
     .string()
     .regex(TIME_REGEX, { message: 'Formato HH:MM inválido' })
     .nullable(),
@@ -49,15 +51,19 @@ export const CreateProfessionalSchema = z.object({
 
 /**
  * Schema completo do profissional, incluindo campos do banco.
- * Reflete o registro como existe no banco de dados.
+ * Reflete o objeto de domínio usado na aplicação (camelCase).
  */
 export const ProfessionalSchema = CreateProfessionalSchema.extend({
   id: z.number().int().positive(),
-  created_at: z
+  
+  // Refatorado: created_at -> createdAt
+  createdAt: z
     .string()
     .datetime({ message: 'Data de criação inválida' })
     .or(z.date()),
-  updated_at: z
+    
+  // Refatorado: updated_at -> updatedAt
+  updatedAt: z
     .string()
     .datetime({ message: 'Data de atualização inválida' })
     .or(z.date()),

@@ -2,10 +2,12 @@ import { describe, it, expect } from 'vitest';
 import { CreateServiceSchema, ServiceSchema } from './service.schema';
 
 describe('CreateServiceSchema', () => {
+  // Mantém apenas os campos necessários para criação (sem ID ou auditoria)
+  // Certifica-se de que tudo está em camelCase (name, price, duration, color)
   const validData = {
     name: 'Corte de Cabelo',
     price: 50.0,
-    duration: 30,
+    duration: 30, // camelCase: garante que não é duration_minutes
     color: '#FF0000',
   };
 
@@ -72,15 +74,19 @@ describe('CreateServiceSchema', () => {
 });
 
 describe('ServiceSchema', () => {
+  // Atualizado para refletir o Objeto Completo vindo do Banco (Passo 1 + Passo 2)
   const validService = {
     id: 1,
     name: 'Manicure',
     price: 35.0,
     duration: 45,
     color: '#00FF00',
+    // Adicionado campos de auditoria obrigatórios pelo Padrão Ouro (Passo 1)
+    createdAt: new Date(),
+    updatedAt: new Date(),
   };
 
-  it('should validate correct full service data (including id)', () => {
+  it('should validate correct full service data (including id and audit fields)', () => {
     const result = ServiceSchema.safeParse(validService);
     expect(result.success).toBe(true);
   });
@@ -93,6 +99,13 @@ describe('ServiceSchema', () => {
 
   it('should fail if id is not a positive integer', () => {
     const invalidData = { ...validService, id: -1 };
+    const result = ServiceSchema.safeParse(invalidData);
+    expect(result.success).toBe(false);
+  });
+
+  // Campos de auditoria agora são esperados no retorno completo
+  it('should fail if createdAt is missing in full schema', () => {
+    const { createdAt, ...invalidData } = validService;
     const result = ServiceSchema.safeParse(invalidData);
     expect(result.success).toBe(false);
   });
