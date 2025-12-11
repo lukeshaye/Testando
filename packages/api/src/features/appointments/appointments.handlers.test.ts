@@ -3,13 +3,14 @@
  *
  * Tarefa: Testes de Handler com Simplificação Radical (Opção B)
  * Correção Aplicada: 
- * 1. Remoção de inputs string ('10:00'). Agora usamos objetos Date completos.
- * 2. Eliminação da lógica de "merge" de datas. Testamos o repasse direto (Input Date -> DB Date).
+ * 1. Ajuste de Schema: startTime/endTime -> appointmentDate/endDate.
+ * 2. Suporte a Joins no Mock DB.
+ * 3. Validação de persistência direta de objetos Date.
  *
  * Princípios:
- * [cite_start]- [cite: 101] PTE (2.15): Testamos o novo contrato simplificado (Date In -> Date Out).
- * [cite_start]- [cite: 22] KISS (2.3): Removemos a complexidade de testes de fuso horário/concatenação.
- * [cite_start]- [cite: 36] SoC (2.5): Handler foca apenas em orquestrar a persistência.
+ * - PTE (2.15): O teste reflete o contrato real do Schema (appointmentDate).
+ * - KISS (2.3): Mapeamento direto de propriedades, sem lógica de conversão.
+ * - SoC (2.5)[cite: 36]: Handler foca apenas em orquestrar a persistência.
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
@@ -32,8 +33,9 @@ const { mockAppointmentsTable } = vi.hoisted(() => {
       clientId: { name: 'client_id' },
       professionalId: { name: 'professional_id' },
       serviceId: { name: 'service_id' },
-      startTime: { name: 'start_time' },
-      endTime: { name: 'end_time' },
+      // CORREÇÃO: Alinhado com o Schema real (appointmentDate/endDate)
+      appointmentDate: { name: 'appointment_date' }, 
+      endDate: { name: 'end_date' },
       status: { name: 'status' },
       createdAt: { name: 'created_at' },
       updatedAt: { name: 'updated_at' },
@@ -44,6 +46,9 @@ const { mockAppointmentsTable } = vi.hoisted(() => {
 vi.mock('@repo/db/schema', () => {
   return {
     appointments: mockAppointmentsTable,
+    // Adicione mocks de clients/services se necessário para os Joins
+    clients: { id: { name: 'id' }, name: { name: 'name' } },
+    services: { id: { name: 'id' }, name: { name: 'name' } },
   };
 });
 
@@ -58,6 +63,9 @@ const createMockChain = (finalValue?: any) => {
     from: vi.fn(() => chain),
     where: vi.fn(() => chain),
     orderBy: vi.fn(() => chain),
+    // CORREÇÃO: Suporte a Joins exigidos pelo plano de correção
+    leftJoin: vi.fn(() => chain),
+    innerJoin: vi.fn(() => chain),
     set: vi.fn(() => chain),
     values: vi.fn(() => chain),
     returning: vi.fn(() => chain),
@@ -102,7 +110,7 @@ describe('Appointments Handlers', () => {
   });
 
   // -------------------------------------------------------------------------
-  // LEITURA (Queries) - Mantidos praticamente iguais
+  // LEITURA (Queries)
   // -------------------------------------------------------------------------
 
   describe('getAppointments', () => {
@@ -110,8 +118,11 @@ describe('Appointments Handlers', () => {
       const mockData = [
         {
           id: 'a1',
-          startTime: new Date('2025-01-01T10:00:00Z'),
+          // CORREÇÃO: Usando a propriedade correta do schema
+          appointmentDate: new Date('2025-01-01T10:00:00Z'),
           userId: mockUser.id,
+          // Simulando o retorno com Join (opcional, mas bom para consistência)
+          clientName: 'João', 
         },
       ];
       const selectChain = createMockChain(mockData);
@@ -120,11 +131,14 @@ describe('Appointments Handlers', () => {
       await getAppointments(mockCtx);
 
       expect(mockDb.select).toHaveBeenCalled();
+      // Se o handler usar joins, podemos verificar:
+      // expect(selectChain.leftJoin).toHaveBeenCalled(); 
       expect(mockCtx.json).toHaveBeenCalledWith(mockData);
     });
 
     it('should handle errors', async () => {
       const selectChain = createMockChain([]);
+      // Mockando erro no orderBy ou em qualquer parte da cadeia
       selectChain.orderBy.mockRejectedValueOnce(new Error('DB Error'));
       mockDb.select.mockReturnValueOnce(selectChain);
 
@@ -139,7 +153,7 @@ describe('Appointments Handlers', () => {
 
   describe('getAppointmentById', () => {
     it('should return appointment if found', async () => {
-      const mockItem = { id: 'a1' };
+      const mockItem = { id: 'a1', appointmentDate: new Date() };
       const selectChain = createMockChain([mockItem]);
       mockDb.select.mockReturnValueOnce(selectChain);
 
@@ -162,12 +176,11 @@ describe('Appointments Handlers', () => {
   });
 
   // -------------------------------------------------------------------------
-  // ESCRITA (Comandos) - ATUALIZADOS PARA OPÇÃO B (Simplificação)
+  // ESCRITA (Comandos) - ATUALIZADOS PARA SCHEMA CORRETO
   // -------------------------------------------------------------------------
 
   describe('createAppointment', () => {
-    it('should persist Date objects directly (mapping appointmentDate -> startTime)', async () => {
-      // 1. Setup: O input agora já vem com Dates completos (graças ao Zod e Frontend corrigido)
+    it('should persist Date objects directly (mapping input -> appointmentDate/endDate)', async () => {
       const inputDate = new Date('2025-01-02T10:00:00Z');
       const inputEndDate = new Date('2025-01-02T11:00:00Z');
       
@@ -182,8 +195,9 @@ describe('Appointments Handlers', () => {
       const createdData = {
         id: 'a2',
         ...inputPayload,
-        startTime: inputDate, // O que foi salvo no banco
-        endTime: inputEndDate,
+        // CORREÇÃO: O retorno do DB usa as colunas corretas
+        appointmentDate: inputDate, 
+        endDate: inputEndDate,
         userId: mockUser.id,
       };
 
@@ -193,39 +207,36 @@ describe('Appointments Handlers', () => {
 
       await createAppointment(mockCtx);
 
-      // 2. Verificação (PTE 2.15):
-      // O handler deve pegar appointmentDate e jogar na coluna startTime SEM tentar formatar string
+      // Verificação PTE (2.15): O handler deve usar as chaves corretas do schema
       expect(mockDb.insert).toHaveBeenCalled();
       
       expect(insertChain.values).toHaveBeenCalledWith(expect.objectContaining({
         clientId: 'c1',
         userId: mockUser.id,
-        startTime: inputDate, // Deve ser exatamente o objeto Date recebido
-        endTime: inputEndDate
+        // CORREÇÃO: Verificando chaves corretas do Schema
+        appointmentDate: inputDate, 
+        endDate: inputEndDate
       }));
 
-      // Não deve haver menção a strings de hora '10:00'
       expect(mockCtx.json).toHaveBeenCalledWith(createdData, 201);
     });
   });
 
   describe('updateAppointment', () => {
-    it('should update startTime directly from appointmentDate input', async () => {
-      // Cenário: Frontend manda nova data completa. Backend apenas salva.
+    it('should update appointmentDate directly from input', async () => {
       const existingItem = { id: 'a1', userId: mockUser.id };
       
       const newDate = new Date('2025-05-20T15:30:00Z');
       const updatePayload = {
-        appointmentDate: newDate, // Nova data e hora
+        appointmentDate: newDate, 
       };
 
-      const updatedItem = { ...existingItem, startTime: newDate };
+      // CORREÇÃO: Mockando retorno com chave correta
+      const updatedItem = { ...existingItem, appointmentDate: newDate };
 
-      // Mock Select (Verificação de existência)
       const selectChain = createMockChain([existingItem]);
       mockDb.select.mockReturnValueOnce(selectChain);
 
-      // Mock Update
       const updateChain = createMockChain([updatedItem]);
       mockDb.update.mockReturnValueOnce(updateChain);
       
@@ -235,21 +246,20 @@ describe('Appointments Handlers', () => {
 
       expect(mockDb.update).toHaveBeenCalled();
 
-      // KISS (2.3): O handler não tenta mais combinar data velha + hora nova.
-      // Ele confia que o 'appointmentDate' recebido é a verdade absoluta.
+      // KISS (2.3): Mapeamento direto input -> db field
       expect(updateChain.set).toHaveBeenCalledWith(expect.objectContaining({
-        startTime: newDate, // Mapeou appointmentDate -> startTime
+        appointmentDate: newDate, // CORREÇÃO: Usando appointmentDate
         updatedAt: expect.any(Date)
       }));
 
-      // Garante que endTime não foi tocado pois não foi enviado
+      // Garante que endDate não foi tocado
       const setArgs = updateChain.set.mock.calls[0][0];
-      expect(setArgs).not.toHaveProperty('endTime');
+      expect(setArgs).not.toHaveProperty('endDate');
       
       expect(mockCtx.json).toHaveBeenCalledWith(updatedItem);
     });
 
-    it('should update endTime directly from endDate input', async () => {
+    it('should update endDate directly from input', async () => {
       const existingItem = { id: 'a1', userId: mockUser.id };
       
       const newEndDate = new Date('2025-05-20T16:00:00Z');
@@ -260,7 +270,8 @@ describe('Appointments Handlers', () => {
       const selectChain = createMockChain([existingItem]);
       mockDb.select.mockReturnValueOnce(selectChain);
 
-      const updateChain = createMockChain([{ ...existingItem, endTime: newEndDate }]);
+      // CORREÇÃO: Usando endDate
+      const updateChain = createMockChain([{ ...existingItem, endDate: newEndDate }]);
       mockDb.update.mockReturnValueOnce(updateChain);
       
       mockCtx.req.valid.mockReturnValue(updatePayload);
@@ -268,12 +279,12 @@ describe('Appointments Handlers', () => {
       await updateAppointment(mockCtx);
 
       expect(updateChain.set).toHaveBeenCalledWith(expect.objectContaining({
-        endTime: newEndDate // Mapeou endDate -> endTime
+        endDate: newEndDate // CORREÇÃO: Usando endDate
       }));
     });
 
     it('should return 404 if appointment not found', async () => {
-      const selectChain = createMockChain([]); // Retorna vazio
+      const selectChain = createMockChain([]); 
       mockDb.select.mockReturnValueOnce(selectChain);
       
       mockCtx.req.valid.mockReturnValue({ appointmentDate: new Date() });

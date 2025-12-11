@@ -2,20 +2,14 @@
  * /packages/web/src/features/appointments/components/AppointmentCalendar.tsx
  *
  * TAREFA: 3.2. AppointmentCalendar.tsx
- * DE: src/react-app/pages/Appointments.tsx (lógica principal de renderização, navegação, filtros e groupedAppointments)
- *
- * Este componente gerencia o estado da UI da agenda (data, profissional) e
- * consome os hooks de dados (Queries) para renderizar a timeline de agendamentos.
- * Ele também gerencia a abertura dos modais de CRUD.
+ * CORREÇÃO: Padronização de dados (camelCase), correção de acesso a objetos aninhados
+ * e uso consistente de dayjs (DRY).
  */
 
 import { useState, useMemo } from 'react';
-// REMOVIDO: import moment from 'moment';
-// REMOVIDO: import 'moment/locale/pt-br';
-// ADICIONADO: dayjs e seus plugins/locales
 import dayjs from 'dayjs';
 import 'dayjs/locale/pt-br';
-import localizedFormat from 'dayjs/plugin/localizedFormat'; // Plugin para formatos localizados
+import localizedFormat from 'dayjs/plugin/localizedFormat';
 
 import {
   Plus,
@@ -43,7 +37,7 @@ import {
 } from '@/packages/ui/select';
 import { Card, CardContent, CardHeader } from '@/packages/ui/card';
 import { LoadingSpinner } from '@/packages/ui/loading-spinner';
-import { ConfirmationModal } from '@/packages/ui/confirmation-modal'; // Assumindo novo caminho
+import { ConfirmationModal } from '@/packages/ui/confirmation-modal';
 import { useToast } from '@/packages/ui/use-toast';
 
 // Tipos
@@ -124,7 +118,7 @@ export function AppointmentCalendar() {
   // --- 2. Consumo de Dados (Nível 3) ---
   const { data: appointments = [], isLoading: isLoadingAppointments } =
     useAppointmentsQuery({
-      date: dayjs(selectedDate).format('YYYY-MM-DD'), // Alterado para dayjs
+      date: dayjs(selectedDate).format('YYYY-MM-DD'),
       professionalId: selectedProfessionalId,
     });
 
@@ -137,7 +131,7 @@ export function AppointmentCalendar() {
 
   // --- 3. Lógica de UI e Memos ---
 
-  // Opções para o filtro de profissionais (lógica do legado)
+  // Opções para o filtro de profissionais
   const professionalOptions = useMemo(() => {
     const allOption: { id: null; name: string; color?: string } = {
       id: null,
@@ -146,17 +140,19 @@ export function AppointmentCalendar() {
     return [allOption, ...professionals];
   }, [professionals]);
 
-  // Agrupamento de agendamentos por hora (lógica do legado)
+  // Agrupamento de agendamentos por hora (Corrigido para camelCase)
   const groupedAppointments = useMemo(() => {
+    // CORREÇÃO: Uso de appointmentDate (camelCase)
     const sortedAppointments = [...appointments].sort(
       (a, b) =>
-        new Date(a.appointment_date).getTime() -
-        new Date(b.appointment_date).getTime(),
+        new Date(a.appointmentDate).getTime() -
+        new Date(b.appointmentDate).getTime(),
     );
 
     return sortedAppointments.reduce(
       (acc, app) => {
-        const time = dayjs(app.appointment_date).format('HH:mm'); // Alterado para dayjs
+        // CORREÇÃO: Uso de appointmentDate (camelCase)
+        const time = dayjs(app.appointmentDate).format('HH:mm');
         if (!acc[time]) acc[time] = [];
         acc[time].push(app);
         return acc;
@@ -165,41 +161,36 @@ export function AppointmentCalendar() {
     );
   }, [appointments]);
 
-  // Formatação da data do cabeçalho (lógica do legado)
+  // Formatação da data do cabeçalho
   const formatHeaderDate = (date: Date) => {
     if (!date) return 'Selecione uma data';
-    return dayjs(date).format('dddd, D [de] MMMM'); // Alterado para dayjs
+    return dayjs(date).format('dddd, D [de] MMMM');
   };
 
   // --- 4. Handlers de UI ---
 
-  // Navegação de dias (lógica do legado)
   const handleDayNavigation = (direction: 'prev' | 'next') => {
-    const newDate = dayjs(selectedDate) // Alterado para dayjs
+    const newDate = dayjs(selectedDate)
       .add(direction === 'prev' ? -1 : 1, 'day')
       .toDate();
     setSelectedDate(newDate);
   };
 
-  // Abrir modal (lógica do legado)
   const handleOpenModal = (appointment?: AppointmentType) => {
     setEditingAppointment(appointment || null);
     setIsModalOpen(true);
   };
 
-  // Fechar modal (lógica do legado)
   const handleCloseModal = () => {
     setIsModalOpen(false);
     setEditingAppointment(null);
   };
 
-  // Clique para deletar (lógica do legado)
   const handleDeleteClick = (appointment: AppointmentType) => {
     setAppointmentToDelete(appointment);
     setIsDeleteModalOpen(true);
   };
 
-  // Confirmação de deleção (adaptada para mutation)
   const handleDeleteConfirm = () => {
     if (!appointmentToDelete) return;
 
@@ -211,7 +202,6 @@ export function AppointmentCalendar() {
         });
         setIsDeleteModalOpen(false);
         setAppointmentToDelete(null);
-        // Invalidação de cache é feita pelo hook (PGEC)
       },
       onError: (error) => {
         toast({
@@ -236,7 +226,7 @@ export function AppointmentCalendar() {
           </p>
         </div>
         <div className="mt-4 sm:mt-0 flex items-center space-x-3">
-          {/* Filtro de Profissional (CDA: Select) */}
+          {/* Filtro de Profissional */}
           <Select
             value={
               selectedProfessionalId === null
@@ -270,7 +260,7 @@ export function AppointmentCalendar() {
             </SelectContent>
           </Select>
 
-          {/* Botão Novo Agendamento (Desktop) */}
+          {/* Botão Novo Agendamento */}
           <Button
             onClick={() => handleOpenModal()}
             className="hidden sm:inline-flex"
@@ -281,10 +271,10 @@ export function AppointmentCalendar() {
         </div>
       </div>
 
-      {/* Calendário/Agenda (CDA: Card) */}
+      {/* Calendário/Agenda */}
       <div className="mt-8">
         <Card className="min-h-[60vh] overflow-hidden">
-          {/* Cabeçalho do Card (Navegação de Data) */}
+          {/* Cabeçalho do Card */}
           <CardHeader className="bg-background p-6 border-b border-border">
             <div className="flex justify-between items-center">
               <Button
@@ -318,14 +308,14 @@ export function AppointmentCalendar() {
             </div>
           </CardHeader>
 
-          {/* Conteúdo do Card (Timeline ou Estado Vazio) */}
+          {/* Conteúdo do Card */}
           <CardContent className="p-4 sm:p-6">
             {isLoading ? (
               <div className="flex justify-center items-center py-20">
                 <LoadingSpinner />
               </div>
             ) : Object.keys(groupedAppointments).length === 0 ? (
-              // Estado Vazio (lógica do legado, UI do CDA)
+              // Estado Vazio
               <div className="text-center py-20">
                 <div className="bg-accent rounded-full p-6 w-24 h-24 mx-auto mb-6 flex items-center justify-center">
                   <CalendarIcon className="h-12 w-12 text-accent-foreground" />
@@ -342,7 +332,7 @@ export function AppointmentCalendar() {
                 </Button>
               </div>
             ) : (
-              // Timeline (lógica do legado, UI do CDA)
+              // Timeline
               <div className="space-y-6">
                 {Object.entries(groupedAppointments).map(([time, apps]) => (
                   <div key={time} className="relative flex gap-x-3">
@@ -360,15 +350,16 @@ export function AppointmentCalendar() {
                     <div className="flex-grow pb-6">
                       <div className="space-y-3">
                         {apps.map((app) => {
+                          // CORREÇÃO: Uso de professionalId (camelCase)
                           const professional = professionals.find(
-                            (p) => p.id === app.professional_id,
+                            (p) => p.id === app.professionalId,
                           );
-                          // (assumindo que useAppointmentsQuery faz o join ou
-                          // que temos acesso a outras stores/queries para
-                          // pegar `service.name` e `client.name` se
-                          // a `app` não os tiver)
-                          // Para este exercício, usaremos os dados da `app`
-                          // como no legado (ex: `app.client_name`).
+                          
+                          // CORREÇÃO: Acesso seguro a objetos aninhados (service.name, client.name)
+                          // e fallback para o objeto professional encontrado localmente.
+                          const serviceName = app.service?.name || 'Serviço não encontrado';
+                          const clientName = app.client?.name || 'Cliente não encontrado';
+                          const professionalName = professional?.name || app.professional?.name || 'Profissional não encontrado';
 
                           return (
                             <Card
@@ -388,26 +379,24 @@ export function AppointmentCalendar() {
                                   />
                                   <div>
                                     <p className="font-semibold text-foreground group-hover:text-primary transition-colors">
-                                      {app.service ||
-                                        'Serviço não encontrado'}
+                                      {serviceName}
                                     </p>
                                     <p className="text-sm text-muted-foreground mt-1 flex items-center">
                                       <User className="w-3 h-3 mr-1.5" />
-                                      {app.client_name ||
-                                        'Cliente não encontrado'}
+                                      {clientName}
                                     </p>
                                     <p className="text-xs text-muted-foreground mt-1.5 flex items-center">
                                       <Scissors className="w-3 h-3 mr-1.5" />
-                                      {app.professional ||
-                                        'Profissional não encontrado'}
+                                      {professionalName}
                                     </p>
                                   </div>
                                 </div>
                                 <div className="text-right flex-shrink-0 ml-4">
                                   <div className="bg-muted rounded-lg px-3 py-1">
                                     <p className="text-sm font-medium text-foreground">
-                                      {dayjs(app.end_date).diff( // Alterado para dayjs
-                                        dayjs(app.appointment_date), // Alterado para dayjs
+                                      {/* CORREÇÃO: Uso de endDate e appointmentDate (camelCase) */}
+                                      {dayjs(app.endDate).diff(
+                                        dayjs(app.appointmentDate),
                                         'minutes',
                                       )}{' '}
                                       min
@@ -445,8 +434,6 @@ export function AppointmentCalendar() {
         isOpen={isModalOpen}
         onClose={handleCloseModal}
         editingAppointment={editingAppointment}
-        // Passa a data selecionada e o profissional filtrado para o modal
-        // como ponto de partida para um novo agendamento.
         initialDate={selectedDate}
         initialProfessionalId={selectedProfessionalId}
       />
@@ -456,8 +443,9 @@ export function AppointmentCalendar() {
         onClose={() => setIsDeleteModalOpen(false)}
         onConfirm={handleDeleteConfirm}
         title="Excluir Agendamento"
+        // CORREÇÃO: Acesso a client.name aninhado
         message={`Tem certeza que deseja excluir o agendamento para "${
-          appointmentToDelete?.client_name || 'Cliente'
+          appointmentToDelete?.client?.name || 'Cliente'
         }"?`}
         confirmText="Excluir"
         variant="destructive"

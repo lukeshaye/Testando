@@ -2,24 +2,7 @@
  * /packages/web/src/features/appointments/components/AppointmentCalendar.test.tsx
  *
  * TAREFA: 4.8 (Testes) - AppointmentCalendar.test.tsx
- * PLANO:
- * - Zombar (mock) os hooks que o componente consome:
- * - useAppointmentsQuery
- * - useProfessionalsQuery
- * - useDeleteAppointmentMutation
- * - useToast
- * - Zombar os componentes modais:
- * - AppointmentFormModal
- * - ConfirmationModal
- * - Zombar componentes de UI auxiliares (LoadingSpinner)
- * - Testar se renderiza o estado de "loading" (Requisito do Plano).
- * - Testar se renderiza o estado "vazio" (Quando não há dados).
- * - Testar se renderiza os "dados" (Requisito do Plano).
- * - Testar interações:
- * - Abertura do modal de criação (botão "Agendar" e FAB).
- * - Abertura do modal de edição (clique no card).
- * - Navegação de data (anterior/próximo).
- * - Filtro de profissional.
+ * CORREÇÃO: Ajuste de Schema (CamelCase e Relacionamentos)
  */
 
 import {
@@ -98,37 +81,53 @@ const mockProfessionals = [
     id: 1,
     name: 'Dr. Teste',
     color: '#ff0000',
-    work_start_time: '09:00',
-    work_end_time: '18:00',
-    lunch_start_time: '12:00',
-    lunch_end_time: '13:00',
+    workStartTime: '09:00', // Atualizado para camelCase por precaução
+    workEndTime: '18:00',
+    lunchStartTime: '12:00',
+    lunchEndTime: '13:00',
   },
 ];
 
+// ATUALIZAÇÃO: Estrutura ajustada para camelCase e objetos aninhados
+// conforme o novo padrão do backend (Drizzle ORM)
 const mockAppointments = [
   {
     id: 101,
-    appointment_date: '2025-11-14T10:00:00Z',
-    end_date: '2025-11-14T11:00:00Z',
-    client_name: 'Cliente A',
-    service: 'Corte',
-    professional: 'Dr. Teste',
-    professional_id: 1,
-    client_id: 1,
-    service_id: 1,
+    appointmentDate: '2025-11-14T10:00:00Z', // CORRIGIDO: snake_case -> camelCase
+    endDate: '2025-11-14T11:00:00Z',         // CORRIGIDO: snake_case -> camelCase
+    client: {
+      id: 1,
+      name: 'Cliente A' // CORRIGIDO: objeto aninhado
+    },
+    service: {
+      id: 1,
+      name: 'Corte'     // CORRIGIDO: objeto aninhado
+    },
+    professional: {
+      id: 1,
+      name: 'Dr. Teste'
+    },
+    professionalId: 1, // CORRIGIDO
     notes: '',
     status: 'CONFIRMED',
   },
   {
     id: 102,
-    appointment_date: '2025-11-14T14:00:00Z',
-    end_date: '2025-11-14T14:30:00Z',
-    client_name: 'Cliente B',
-    service: 'Barba',
-    professional: 'Dr. Teste',
-    professional_id: 1,
-    client_id: 2,
-    service_id: 2,
+    appointmentDate: '2025-11-14T14:00:00Z',
+    endDate: '2025-11-14T14:30:00Z',
+    client: {
+      id: 2,
+      name: 'Cliente B'
+    },
+    service: {
+      id: 2,
+      name: 'Barba'
+    },
+    professional: {
+      id: 1,
+      name: 'Dr. Teste'
+    },
+    professionalId: 1,
     notes: '',
     status: 'CONFIRMED',
   },
@@ -218,13 +217,11 @@ describe('AppointmentCalendar', () => {
     // Verifica se o estado vazio NÃO está presente
     expect(screen.queryByText('Nenhum agendamento')).not.toBeInTheDocument();
 
-    // Verifica os marcadores de tempo (dayjs local 'pt-br')
-    // 10:00:00Z -> 07:00 (considerando -03:00 de Porto Alegre)
-    // 14:00:00Z -> 11:00 (considerando -03:00 de Porto Alegre)
-    // Nota: O teste roda em UTC, mas o dayjs no componente formata para local
-    // Vamos testar pelos dados do cliente/serviço que são mais estáveis
+    // Verifica os dados usando as novas estruturas
     expect(screen.getByText('Cliente A')).toBeInTheDocument();
     expect(screen.getByText('Corte')).toBeInTheDocument();
+    
+    // O cálculo de tempo deve funcionar baseando-se em appointmentDate/endDate
     expect(screen.getByText('60 min')).toBeInTheDocument();
 
     expect(screen.getByText('Cliente B')).toBeInTheDocument();
@@ -343,7 +340,7 @@ describe('AppointmentCalendar', () => {
       // Verifica se o hook foi chamado com o ID
       expect(mockedUseAppointmentsQuery).toHaveBeenLastCalledWith(
         expect.objectContaining({
-          professionalId: 1, // ID do "Dr. Teste"
+          professionalId: 1, // CORRIGIDO: professional_id -> professionalId
         }),
       );
     });

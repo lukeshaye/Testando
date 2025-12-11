@@ -1,28 +1,43 @@
 import { Context } from 'hono';
 import { eq, and, desc } from 'drizzle-orm';
-import { appointments } from '@repo/db/schema';
+import { appointments, clients, services } from '@repo/db/schema'; // Importação das tabelas para Join
 import { Variables } from '../../types';
 
 // Define o tipo de Contexto para incluir as Variáveis injetadas (User, DB)
 type AppContext = Context<{ Variables: Variables }>;
 
-// ❌ REMOVIDO: combineDateAndTime. 
-// Princípio 2.3 (KISS): Removemos complexidade desnecessária de parsing manual.
-// A responsabilidade de garantir datas válidas agora é do Schema (Zod) e do Frontend.
-
 /**
  * Handler para buscar todos os agendamentos (GET /)
- * Princípio 2.12 (CQRS): Operação de Leitura otimizada [cite: 76]
+ * Princípio 2.12 (CQRS): Operação de Leitura otimizada com Joins 
+ * Correção: Retorna appointmentDate/endDate e nomes de cliente/serviço.
  */
 export const getAppointments = async (c: AppContext) => {
   const user = c.var.user;
 
   try {
     const data = await c.var.db
-      .select()
+      .select({
+        // Selecionamos todos os campos do agendamento
+        id: appointments.id,
+        appointmentDate: appointments.appointmentDate, // ✅ Corrigido: Schema correto
+        endDate: appointments.endDate,                 // ✅ Corrigido: Schema correto
+        status: appointments.status,
+        notes: appointments.notes,
+        clientId: appointments.clientId,
+        serviceId: appointments.serviceId,
+        createdAt: appointments.createdAt,
+        updatedAt: appointments.updatedAt,
+        userId: appointments.userId,
+        // ✅ Correção Plan 2: Joins para trazer dados legíveis para a UI
+        clientName: clients.name,
+        serviceName: services.name,
+      })
       .from(appointments)
-      .where(eq(appointments.userId, user.id)) 
-      .orderBy(desc(appointments.startTime));
+      // Left Joins garantem que o agendamento retorne mesmo se cliente/serviço tiverem sido deletados (opcional, mas seguro)
+      .leftJoin(clients, eq(appointments.clientId, clients.id))
+      .leftJoin(services, eq(appointments.serviceId, services.id))
+      .where(eq(appointments.userId, user.id))
+      .orderBy(desc(appointments.appointmentDate)); // ✅ Corrigido: Ordenação pelo campo correto
 
     return c.json(data);
   } catch (error) {
@@ -40,8 +55,20 @@ export const getAppointmentById = async (c: AppContext) => {
 
   try {
     const data = await c.var.db
-      .select()
+      .select({
+        id: appointments.id,
+        appointmentDate: appointments.appointmentDate,
+        endDate: appointments.endDate,
+        status: appointments.status,
+        notes: appointments.notes,
+        clientId: appointments.clientId,
+        serviceId: appointments.serviceId,
+        clientName: clients.name,   // Incluso para consistência
+        serviceName: services.name, // Incluso para consistência
+      })
       .from(appointments)
+      .leftJoin(clients, eq(appointments.clientId, clients.id))
+      .leftJoin(services, eq(appointments.serviceId, services.id))
       .where(
         and(
           eq(appointments.id, id),
@@ -68,19 +95,16 @@ export const createAppointment = async (c: AppContext) => {
   const user = c.var.user;
 
   try {
-    // ✅ CORREÇÃO (Opção B): Usamos as datas já validadas pelo Zod.
-    // O Zod garante que appointmentDate e endDate são objetos Date válidos.
-    // Removemos 'startTime' e 'endTime' string do destructuring pois não existem mais no payload.
+    // ✅ CORREÇÃO PLANO: Usamos diretamente appointmentDate e endDate.
+    // O Schema (Zod) já garante que são objetos Date válidos.
     const { appointmentDate, endDate, ...rest } = payload;
 
     const data = await c.var.db
       .insert(appointments)
       .values({
         ...rest,
-        // Mapeamento direto: O objeto Date completo entra no banco.
-        // Isso preserva o Timezone UTC corretamente.
-        startTime: appointmentDate, 
-        endTime: endDate,           
+        appointmentDate: appointmentDate, // ✅ Mapeamento correto para o Schema do DB
+        endDate: endDate,                 // ✅ Mapeamento correto para o Schema do DB
         userId: user.id,
       })
       .returning();
@@ -94,7 +118,7 @@ export const createAppointment = async (c: AppContext) => {
 
 /**
  * Handler para atualizar um agendamento (PUT /:id)
- * Aplicação do Princípio 2.14 (Imutabilidade): Criamos novo estado em vez de mutar strings[cite: 93].
+ * Aplicação do Princípio 2.14 (Imutabilidade)[cite: 93].
  */
 export const updateAppointment = async (c: AppContext) => {
   const { id } = c.req.param();
@@ -119,7 +143,6 @@ export const updateAppointment = async (c: AppContext) => {
     }
 
     // 2. Preparação segura dos dados
-    // Removemos campos de metadados e extraímos as datas para tratamento especial
     const { 
       appointmentDate, 
       endDate,
@@ -134,15 +157,13 @@ export const updateAppointment = async (c: AppContext) => {
       updatedAt: new Date(),
     };
 
-    // ✅ CORREÇÃO (Opção B): Lógica Simplificada.
-    // Se o payload trouxe novas datas (objetos Date), atualizamos diretamente.
-    // Não há mais recálculo ou split de strings 'HH:mm'.
+    // ✅ CORREÇÃO PLANO: Atualização direta dos campos corretos
     if (appointmentDate) {
-        valuesToUpdate.startTime = appointmentDate;
+        valuesToUpdate.appointmentDate = appointmentDate; // Nome correto da coluna
     }
     
     if (endDate) {
-        valuesToUpdate.endTime = endDate;
+        valuesToUpdate.endDate = endDate; // Nome correto da coluna
     }
 
     // 3. Executa o Update
