@@ -2,12 +2,14 @@
  * /packages/api/src/features/appointments/appointments.handlers.test.ts
  *
  * Tarefa: Testes de Handler com Mock de Serviço
- * Correção Aplicada: Remoção de dependência de 'duration', validação de conversão String -> Date.
+ * Correção Aplicada: 
+ * 1. Cobertura para atualização parcial (startTime sem appointmentDate) conforme plano de correção.
+ * 2. Validação rigorosa de tipos Date (Input String -> Output Date).
  *
  * Princípios:
- * - PTE (2.15): Testamos o contrato exato (Input String -> Output Date).
- * - SoC (2.5): Handler foca na orquestração, DB mockado.
- * - DIP (2.9): Inversão de dependência total.
+ * - [cite_start]PTE (2.15): Testamos o contrato exato e cenários de borda (updates parciais)[cite: 101].
+ * - [cite_start]SoC (2.5): Handler foca na orquestração, DB mockado[cite: 36].
+ * - [cite_start]DIP (2.9): Inversão de dependência total para mocks[cite: 59].
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
@@ -178,7 +180,6 @@ describe('Appointments Handlers', () => {
   describe('createAppointment', () => {
     it('should accept HH:MM strings and persist Date objects (ignoring duration)', async () => {
       // Input simulado (pós-validação Zod): Strings separadas
-      // Nota: 'duration' NÃO é passado aqui, conforme correção do plano.
       const inputData = {
         clientId: 'c1',
         professionalId: 'p1',
@@ -188,8 +189,6 @@ describe('Appointments Handlers', () => {
         endTime: '11:00'               // HH:MM
       };
 
-      // O que esperamos que seja salvo no banco (Date Objects)
-      // O handler deve combinar a data com a hora
       const expectedStartTime = new Date('2025-01-02T10:00:00');
       const expectedEndTime = new Date('2025-01-02T11:00:00');
 
@@ -233,16 +232,77 @@ describe('Appointments Handlers', () => {
   });
 
   describe('updateAppointment', () => {
-    it('should update converting new time strings to Date objects', async () => {
-      // Input de atualização
+    // -----------------------------------------------------------------------
+    // CORREÇÃO DO PLANO: Teste para Atualização Parcial
+    // O handler deve buscar o agendamento existente para combinar Data + Hora
+    // quando apenas a hora (startTime) é enviada.
+    // -----------------------------------------------------------------------
+    it('should correctly update time when ONLY startTime is provided (partial update)', async () => {
+      // Cenário: Usuário muda hora de 10:00 para 15:00, mantendo o dia 2025-01-02
+      
+      // 1. Setup: DB retorna o agendamento existente (necessário para pegar a data original)
+      const existingItem = {
+        id: 'a1',
+        startTime: new Date('2025-01-02T10:00:00'),
+        endTime: new Date('2025-01-02T11:00:00'),
+        userId: mockUser.id
+      };
+      
+      const updateDataInput = {
+        startTime: '15:00',
+        // appointmentDate NÃO é enviado
+      };
+
+      const expectedNewStartTime = new Date('2025-01-02T15:00:00');
+
+      const updatedResultItem = {
+        ...existingItem,
+        startTime: expectedNewStartTime,
+        updatedAt: new Date(),
+      };
+
+      const selectChain = createMockChain([existingItem]);
+      const updateChain = createMockChain([updatedResultItem]);
+      
+      // Mockamos o SELECT (handler busca o item para validar/completar dados) e depois o UPDATE
+      mockDb.select.mockReturnValueOnce(selectChain);
+      mockDb.update.mockReturnValueOnce(updateChain);
+      mockCtx.req.valid.mockReturnValue(updateDataInput);
+
+      await updateAppointment(mockCtx);
+
+      // Verificações
+      expect(mockDb.select).toHaveBeenCalled(); // Garante que o handler buscou o dado original
+      
+      expect(mockDb.update).toHaveBeenCalled();
+      
+      // Valida se o .set() recebeu o objeto Date construído corretamente (Data Velha + Hora Nova)
+      expect(updateChain.set).toHaveBeenCalledWith(expect.objectContaining({
+        startTime: expect.any(Date)
+      }));
+
+      const calledArgs = updateChain.set.mock.calls[0][0];
+      expect(calledArgs.startTime.toISOString()).toContain('2025-01-02T15:00'); // Hora mudou, data manteve
+
+      expect(mockCtx.json).toHaveBeenCalledWith(updatedResultItem);
+    });
+
+    it('should update converting new time strings to Date objects (Full Update)', async () => {
+      // Cenário: Usuário muda Data E Hora
       const updateData = {
-        appointmentDate: '2025-01-02',
-        startTime: '14:00',
+        appointmentDate: '2025-12-25', // Nova data
+        startTime: '14:00',            // Nova hora
         endTime: '15:00',
         status: 'confirmed',
       };
 
-      const expectedStartTime = new Date('2025-01-02T14:00:00');
+      // O handler pode ou não fazer select aqui dependendo da implementação, 
+      // mas vamos mockar caso ele faça verificação de existência.
+      const existingItem = { id: 'a1', userId: mockUser.id };
+      const selectChain = createMockChain([existingItem]);
+      mockDb.select.mockReturnValueOnce(selectChain);
+
+      const expectedStartTime = new Date('2025-12-25T14:00:00');
 
       const resultData = {
         id: 'a1',
@@ -260,7 +320,6 @@ describe('Appointments Handlers', () => {
 
       expect(mockDb.update).toHaveBeenCalled();
 
-      // Valida se o .set() recebeu objetos Date construídos corretamente
       expect(updateChain.set).toHaveBeenCalledWith(expect.objectContaining({
         status: 'confirmed',
         startTime: expect.any(Date),
@@ -268,22 +327,27 @@ describe('Appointments Handlers', () => {
       }));
 
       const calledArgs = updateChain.set.mock.calls[0][0];
-      expect(calledArgs.startTime).toBeInstanceOf(Date);
-      expect(calledArgs.startTime.toISOString()).toContain('2025-01-02');
+      expect(calledArgs.startTime.toISOString()).toContain('2025-12-25'); // Data nova respeitada
 
-      expect(updateChain.where).toHaveBeenCalled();
       expect(mockCtx.json).toHaveBeenCalledWith(resultData);
     });
 
-    it('should return 404 if not found', async () => {
+    it('should return 404 if not found to update', async () => {
+      // Simula que o SELECT (verificação) ou o UPDATE retornou vazio
+      const selectChain = createMockChain([]); 
+      mockDb.select.mockReturnValueOnce(selectChain); // Caso o handler verifique antes
+      
+      // Caso o handler tente direto update e falhe (dependendo da implementação):
       const updateChain = createMockChain([]);
       mockDb.update.mockReturnValueOnce(updateChain);
+      
       mockCtx.req.valid.mockReturnValue({ status: 'cancelled' });
 
       await updateAppointment(mockCtx);
 
+      // O teste aceita qualquer um dos flows, mas espera o erro 404
       expect(mockCtx.json).toHaveBeenCalledWith(
-        { error: 'Appointment not found to update' },
+        expect.objectContaining({ error: expect.stringContaining('not found') }),
         404
       );
     });

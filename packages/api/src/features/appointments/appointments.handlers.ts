@@ -8,7 +8,6 @@ type AppContext = Context<{ Variables: Variables }>;
 
 /**
  * Função auxiliar para combinar Data e Hora em um objeto Date UTC válido.
- * Resolve o problema de "Falha de Tipo na Persistência" identificado no plano.
  */
 const combineDateAndTime = (dateInput: Date | string, timeStr: string): Date => {
   const date = new Date(dateInput);
@@ -23,7 +22,7 @@ const combineDateAndTime = (dateInput: Date | string, timeStr: string): Date => 
 
 /**
  * Handler para buscar todos os agendamentos (GET /)
- * Princípio 2.12 (CQRS): Operação de Leitura otimizada
+ * Princípio 2.12 (CQRS): Operação de Leitura otimizada [cite: 76]
  */
 export const getAppointments = async (c: AppContext) => {
   const user = c.var.user;
@@ -72,32 +71,28 @@ export const getAppointmentById = async (c: AppContext) => {
 
 /**
  * Handler para criar um novo agendamento (POST /)
- * Princípio 2.16 (Design Seguro): userId é injetado pelo backend.
- * CORREÇÃO: Remove uso de 'duration' e usa 'endTime' do contrato validado.
+ * Princípio 2.16 (Design Seguro): userId é injetado pelo backend[cite: 108].
  */
 export const createAppointment = async (c: AppContext) => {
-  // O payload vem validado pelo Zod. Espera-se: { appointmentDate: Date, startTime: string, endTime: string, ... }
   const payload = c.req.valid('json');
   const user = c.var.user;
 
   try {
-    // 1. Combina a data (dia) com a string de hora (HH:MM) para criar os objetos Date reais
+    // 1. Combina a data com a string de hora para criar os objetos Date reais
     const fullStartTime = combineDateAndTime(payload.appointmentDate, payload.startTime);
     
-    // 2. CORREÇÃO: Usa o endTime fornecido explicitamente pelo payload validado,
-    // em vez de calcular com base em uma propriedade 'duration' inexistente.
+    // 2. Usa o endTime fornecido explicitamente pelo payload validado
     const fullEndTime = combineDateAndTime(payload.appointmentDate, payload.endTime);
 
-    // Remove campos auxiliares que não vão para o banco e prepara o objeto final.
-    // Nota: duration foi removido da desestruturação pois não existe no schema.
+    // Remove campos auxiliares que não vão para o banco
     const { appointmentDate, startTime, endTime, ...rest } = payload;
 
     const data = await c.var.db
       .insert(appointments)
       .values({
-        ...rest, // Outros campos como notes, clientName, etc.
-        startTime: fullStartTime, // Agora é um Date, compatível com timestamp do DB
-        endTime: fullEndTime,     // Agora é um Date, calculado corretamente
+        ...rest,
+        startTime: fullStartTime, 
+        endTime: fullEndTime,     
         userId: user.id,
       })
       .returning();
@@ -111,60 +106,86 @@ export const createAppointment = async (c: AppContext) => {
 
 /**
  * Handler para atualizar um agendamento (PUT /:id)
- * Princípio 2.14 (Imutabilidade): Update cria novo estado via updatedAt.
+ * CORREÇÃO APLICADA: Busca prévia para garantir consistência de dados e tipos[cite: 13, 101].
  */
 export const updateAppointment = async (c: AppContext) => {
   const { id } = c.req.param();
   const payload = c.req.valid('json');
   const user = c.var.user;
 
-  // Proteção de campos imutáveis
-  delete payload.id;
-  delete payload.userId;
-  delete payload.createdAt;
-
   try {
-    // Preparação dos dados para atualização
-    const updateData: any = { ...payload };
-
-    // Se houver alteração de horário (Start ou End), precisamos recalcular os objetos Date.
-    // Assume-se que se o usuário quer mudar o horário, ele envia a data base e as horas.
-    if (payload.appointmentDate) {
-       if (payload.startTime) {
-         updateData.startTime = combineDateAndTime(payload.appointmentDate, payload.startTime);
-         delete updateData.startTime; // remove a string auxiliar
-       }
-       
-       if (payload.endTime) {
-         // CORREÇÃO: Usa endTime explicitamente se fornecido
-         updateData.endTime = combineDateAndTime(payload.appointmentDate, payload.endTime);
-         delete updateData.endTime; // remove a string auxiliar
-       }
-       
-       // Limpeza do campo auxiliar de data base
-       delete updateData.appointmentDate;
-    }
-
-    // Remove duration caso tenha sobrado no payload (embora o Zod deva barrar)
-    delete updateData.duration;
-
-    const data = await c.var.db
-      .update(appointments)
-      .set({
-        ...updateData,
-        updatedAt: new Date(),
-      })
+    // 1. Busca o agendamento existente PRIMEIRO para garantir que existe e pertence ao usuário.
+    // Isso é essencial para mesclar datas e horas corretamente.
+    const existing = await c.var.db
+      .select()
+      .from(appointments)
       .where(
         and(
           eq(appointments.id, id),
           eq(appointments.userId, user.id)
         )
       )
-      .returning();
+      .limit(1);
 
-    if (data.length === 0) {
+    if (existing.length === 0) {
       return c.json({ error: 'Appointment not found to update' }, 404);
     }
+
+    const currentAppt = existing[0];
+
+    // 2. Preparação segura dos dados (Tipagem forte em vez de 'any')
+    // Removemos chaves auxiliares do payload original para evitar poluição ou erros de tipo
+    const { 
+      appointmentDate, 
+      startTime: startTimeStr, 
+      endTime: endTimeStr, 
+      duration, // removido se existir
+      id: _id, 
+      userId: _userId, 
+      createdAt: _createdAt,
+      ...otherUpdates 
+    } = payload;
+
+    const valuesToUpdate: Partial<typeof appointments.$inferInsert> = {
+      ...otherUpdates,
+      updatedAt: new Date(),
+    };
+
+    // 3. Lógica de Recálculo de Datas
+    // Se houver alteração de data OU horário, precisamos recalcular os objetos Date.
+    if (appointmentDate || startTimeStr || endTimeStr) {
+       // Define a data base: usa a nova se fornecida, ou a existente do banco.
+       const baseDate = appointmentDate ? new Date(appointmentDate) : currentAppt.startTime;
+       
+       // Atualiza StartTime
+       if (startTimeStr) {
+         // Se forneceu nova hora, combina com a data base
+         valuesToUpdate.startTime = combineDateAndTime(baseDate, startTimeStr);
+       } else if (appointmentDate) {
+         // Se mudou SÓ a data, preserva a hora antiga na nova data
+         const newStart = new Date(baseDate);
+         newStart.setHours(currentAppt.startTime.getHours(), currentAppt.startTime.getMinutes(), 0, 0);
+         valuesToUpdate.startTime = newStart;
+       }
+
+       // Atualiza EndTime
+       if (endTimeStr) {
+         valuesToUpdate.endTime = combineDateAndTime(baseDate, endTimeStr);
+       } else if (appointmentDate) {
+         // Se mudou SÓ a data, preserva a hora de fim antiga
+         const newEnd = new Date(baseDate);
+         newEnd.setHours(currentAppt.endTime.getHours(), currentAppt.endTime.getMinutes(), 0, 0);
+         valuesToUpdate.endTime = newEnd;
+       }
+    }
+
+    // 4. Executa o Update com dados limpos e tipados
+    const data = await c.var.db
+      .update(appointments)
+      .set(valuesToUpdate)
+      .where(eq(appointments.id, id))
+      .returning();
+
     return c.json(data[0]);
   } catch (error) {
     console.error('Error updating appointment:', error);
