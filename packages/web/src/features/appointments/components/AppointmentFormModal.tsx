@@ -103,7 +103,7 @@ const defaultFormValues: Partial<AppointmentFormData> = {
 /**
  * Componente de Modal para criar e editar agendamentos.
  * Refatorado para camelCase seguindo o Passo 4 do Padrão Ouro.
- * Corrigido para conformidade com Auditoria (Timezone e Contrato API).
+ * Corrigido conforme Plano de Simplificação Radical (Opção B).
  */
 export function AppointmentFormModal({
   isOpen,
@@ -247,34 +247,24 @@ export function AppointmentFormModal({
     }
   }, [addMutation.isSuccess, updateMutation.isSuccess, onClose]);
 
-  // --- Manipulador de Envio (Correção Auditoria Item 1 e 2) ---
+  // --- Manipulador de Envio (Correção: Simplificação Radical) ---
   function onSubmit(data: AppointmentFormData) {
-    // Cálculo dos horários usando Dayjs para garantir consistência local
+    // Cálculo do fim apenas para garantir integridade, se necessário.
     const startDayjs = dayjs(data.appointmentDate);
     const endDayjs = startDayjs.add(serviceDuration, 'minutes');
 
-    // Correção: Extração de Strings explícitas para a API.
-    // Evita .toISOString() para não converter para UTC e alterar o dia (Bug de Timezone).
-    // Formato esperado pela API (conforme auditoria): startTime "HH:MM", endTime "HH:MM"
-    const formattedDate = startDayjs.format('YYYY-MM-DD'); 
-    const formattedStartTime = startDayjs.format('HH:mm');
-    const formattedEndTime = endDayjs.format('HH:mm');
-
+    // ✅ CORREÇÃO: Payload limpo e direto.
+    // Enviamos 'appointmentDate' e 'endDate' como objetos Date.
+    // Não formatamos mais strings manuais (YYYY-MM-DD ou HH:mm).
+    // O navegador/axios serializa isso como ISO String automaticamente.
     const payload = {
-      // Campos diretos
       clientId: data.clientId,
       professionalId: data.professionalId,
       serviceId: data.serviceId,
       attended: data.attended,
       price: Math.round(data.price * 100), // Conversão para centavos
       
-      // Campos de Data Corrigidos para o Contrato da API
-      date: formattedDate,       // Data "YYYY-MM-DD" local
-      startTime: formattedStartTime, // "HH:MM" local
-      endTime: formattedEndTime,     // "HH:MM" local
-      
-      // Mantemos appointmentDate/endDate originais apenas se o Schema local exigir validação,
-      // mas o backend deve priorizar date/startTime/endTime
+      // Datas como objetos nativos (KISS - Keep It Simple)
       appointmentDate: data.appointmentDate,
       endDate: endDayjs.toDate(),
     };
