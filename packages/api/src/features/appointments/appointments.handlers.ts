@@ -73,32 +73,31 @@ export const getAppointmentById = async (c: AppContext) => {
 /**
  * Handler para criar um novo agendamento (POST /)
  * Princípio 2.16 (Design Seguro): userId é injetado pelo backend.
- * CORREÇÃO: Conversão de tipos (String 'HH:MM' -> Date Object) antes da persistência.
+ * CORREÇÃO: Remove uso de 'duration' e usa 'endTime' do contrato validado.
  */
 export const createAppointment = async (c: AppContext) => {
-  // O payload vem validado pelo Zod. Espera-se: { appointmentDate: Date, startTime: string, duration: number, ... }
+  // O payload vem validado pelo Zod. Espera-se: { appointmentDate: Date, startTime: string, endTime: string, ... }
   const payload = c.req.valid('json');
   const user = c.var.user;
 
   try {
-    // 1. Combina a data (dia) com a string de hora (HH:MM) para criar o objeto Date real
+    // 1. Combina a data (dia) com a string de hora (HH:MM) para criar os objetos Date reais
     const fullStartTime = combineDateAndTime(payload.appointmentDate, payload.startTime);
     
-    // 2. Calcula o endTime baseado na duração (se a duração vier em minutos)
-    // Se o seu schema Zod já mandar 'endTime', use a mesma lógica do startTime.
-    // Assumindo aqui que o payload tem 'duration' em minutos:
-    const fullEndTime = new Date(fullStartTime.getTime() + (payload.duration || 60) * 60000);
+    // 2. CORREÇÃO: Usa o endTime fornecido explicitamente pelo payload validado,
+    // em vez de calcular com base em uma propriedade 'duration' inexistente.
+    const fullEndTime = combineDateAndTime(payload.appointmentDate, payload.endTime);
 
-    // Remove campos auxiliares que não vão para o banco (como appointmentDate e startTime isolados)
-    // e prepara o objeto final para o Drizzle.
-    const { appointmentDate, startTime, duration, ...rest } = payload;
+    // Remove campos auxiliares que não vão para o banco e prepara o objeto final.
+    // Nota: duration foi removido da desestruturação pois não existe no schema.
+    const { appointmentDate, startTime, endTime, ...rest } = payload;
 
     const data = await c.var.db
       .insert(appointments)
       .values({
         ...rest, // Outros campos como notes, clientName, etc.
         startTime: fullStartTime, // Agora é um Date, compatível com timestamp do DB
-        endTime: fullEndTime,     // Agora é um Date
+        endTime: fullEndTime,     // Agora é um Date, calculado corretamente
         userId: user.id,
       })
       .returning();
@@ -128,20 +127,26 @@ export const updateAppointment = async (c: AppContext) => {
     // Preparação dos dados para atualização
     const updateData: any = { ...payload };
 
-    // Se houver alteração de horário, precisamos recalcular os objetos Date
-    if (payload.appointmentDate && payload.startTime) {
-       const fullStartTime = combineDateAndTime(payload.appointmentDate, payload.startTime);
-       updateData.startTime = fullStartTime;
-       
-       if (payload.duration) {
-         updateData.endTime = new Date(fullStartTime.getTime() + payload.duration * 60000);
+    // Se houver alteração de horário (Start ou End), precisamos recalcular os objetos Date.
+    // Assume-se que se o usuário quer mudar o horário, ele envia a data base e as horas.
+    if (payload.appointmentDate) {
+       if (payload.startTime) {
+         updateData.startTime = combineDateAndTime(payload.appointmentDate, payload.startTime);
+         delete updateData.startTime; // remove a string auxiliar
        }
        
-       // Limpeza dos campos auxiliares que não existem na tabela
+       if (payload.endTime) {
+         // CORREÇÃO: Usa endTime explicitamente se fornecido
+         updateData.endTime = combineDateAndTime(payload.appointmentDate, payload.endTime);
+         delete updateData.endTime; // remove a string auxiliar
+       }
+       
+       // Limpeza do campo auxiliar de data base
        delete updateData.appointmentDate;
-       delete updateData.startTime; // remove a string, fica o Date criado acima
-       delete updateData.duration;
     }
+
+    // Remove duration caso tenha sobrado no payload (embora o Zod deva barrar)
+    delete updateData.duration;
 
     const data = await c.var.db
       .update(appointments)

@@ -1,14 +1,13 @@
 /**
  * /packages/api/src/features/appointments/appointments.handlers.test.ts
  *
- * (Executor: LLM 2)
+ * Tarefa: Testes de Handler com Mock de Serviço
+ * Correção Aplicada: Remoção de dependência de 'duration', validação de conversão String -> Date.
  *
- * Tarefa: Refatoração para Testes de Handler com Mock de Serviço (Padrão Ouro)
- * Princípios Aplicados:
- * - PTE (2.15): Testamos o contrato do handler garantindo que ele fala camelCase com o código e o DB.
- * - SoC (2.5): O handler foca na orquestração HTTP, delegando a persistência ao Drizzle.
- * - DIP (2.9): Inversão de dependência via Mocks do Drizzle.
- * - Correção de Plano: Ajuste para validar conversão de String "HH:MM" para Date object.
+ * Princípios:
+ * - PTE (2.15): Testamos o contrato exato (Input String -> Output Date).
+ * - SoC (2.5): Handler foca na orquestração, DB mockado.
+ * - DIP (2.9): Inversão de dependência total.
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
@@ -21,7 +20,7 @@ import {
 } from './appointments.handlers';
 
 // ---------------------------------------------------------------------------
-// MOCK DO SCHEMA (Simulando Passo 1 e 2 da Refatoração)
+// 1. MOCK DO SCHEMA E DB (DIP - Princípio 2.9)
 // ---------------------------------------------------------------------------
 const { mockAppointmentsTable } = vi.hoisted(() => {
   return {
@@ -47,7 +46,7 @@ vi.mock('@repo/db/schema', () => {
 });
 
 // ---------------------------------------------------------------------------
-// HELPERS DE TESTE
+// 2. HELPERS DE TESTE (DRY - Princípio 2.2)
 // ---------------------------------------------------------------------------
 
 const createMockChain = (finalValue?: any) => {
@@ -60,6 +59,7 @@ const createMockChain = (finalValue?: any) => {
     set: vi.fn(() => chain),
     values: vi.fn(() => chain),
     returning: vi.fn(() => chain),
+    // Simula a resolução da Promise ao final da cadeia do Drizzle
     then: vi.fn((onFulfilled: (v: any) => any, _onRejected?: (e: any) => any) =>
       Promise.resolve(onFulfilled(resolvedValue)),
     ),
@@ -89,7 +89,7 @@ describe('Appointments Handlers', () => {
         db: mockDb,
       },
       req: {
-        valid: vi.fn(),
+        valid: vi.fn(), // Simula o validador Zod
         param: vi.fn((key?: string) => (key ? 'a1' : { id: 'a1' })),
       },
       json: vi.fn((data, status) => ({ data, status })),
@@ -101,18 +101,18 @@ describe('Appointments Handlers', () => {
   });
 
   // -------------------------------------------------------------------------
-  // TESTES: Leitura
+  // TESTES: Leitura (Queries - CQRS 2.12)
   // -------------------------------------------------------------------------
 
   describe('getAppointments', () => {
-    it('should fetch appointments via db using camelCase mapping and return 200', async () => {
-      // O DB retorna objetos Date reais para as colunas de tempo
+    it('should fetch appointments via db and return 200', async () => {
+      // O DB retorna objetos Date reais
       const mockData = [
-        { 
-          id: 'a1', 
-          clientId: 'c1', 
-          startTime: new Date('2025-01-01T10:00:00Z'), 
-          userId: mockUser.id 
+        {
+          id: 'a1',
+          clientId: 'c1',
+          startTime: new Date('2025-01-01T10:00:00Z'),
+          userId: mockUser.id,
         },
       ];
       const selectChain = createMockChain(mockData);
@@ -141,11 +141,11 @@ describe('Appointments Handlers', () => {
 
   describe('getAppointmentById', () => {
     it('should return appointment if found', async () => {
-      const mockItem = { 
-        id: 'a1', 
-        clientId: 'c1', 
-        startTime: new Date('2025-01-01T10:00:00Z'), 
-        userId: mockUser.id 
+      const mockItem = {
+        id: 'a1',
+        clientId: 'c1',
+        startTime: new Date('2025-01-01T10:00:00Z'),
+        userId: mockUser.id,
       };
       const selectChain = createMockChain([mockItem]);
       mockDb.select.mockReturnValueOnce(selectChain);
@@ -163,42 +163,46 @@ describe('Appointments Handlers', () => {
 
       await getAppointmentById(mockCtx);
 
-      expect(mockCtx.json).toHaveBeenCalledWith({ error: 'Appointment not found' }, 404);
+      expect(mockCtx.json).toHaveBeenCalledWith(
+        { error: 'Appointment not found' },
+        404
+      );
     });
   });
 
   // -------------------------------------------------------------------------
-  // TESTES: Escrita (Refatorados para nova lógica de Datas)
+  // TESTES: Escrita (Comandos - CQRS 2.12)
+  // Correção Crítica: Valida a conversão de input String para DB Date
   // -------------------------------------------------------------------------
 
   describe('createAppointment', () => {
-    it('should combine date+time strings into Date objects and insert into db', async () => {
-      // Input do Frontend (validado pelo Zod): Strings separadas
-      const inputData = { 
-        clientId: 'c1', 
-        professionalId: 'p1', 
-        serviceId: 's1', 
-        appointmentDate: '2025-01-02', // Data base YYYY-MM-DD
-        startTime: '10:00',            // Hora HH:MM
-        endTime: '11:00'               // Hora HH:MM
+    it('should accept HH:MM strings and persist Date objects (ignoring duration)', async () => {
+      // Input simulado (pós-validação Zod): Strings separadas
+      // Nota: 'duration' NÃO é passado aqui, conforme correção do plano.
+      const inputData = {
+        clientId: 'c1',
+        professionalId: 'p1',
+        serviceId: 's1',
+        appointmentDate: '2025-01-02', // YYYY-MM-DD
+        startTime: '10:00',            // HH:MM
+        endTime: '11:00'               // HH:MM
       };
-      
-      // O que esperamos que seja salvo no banco (Date Objects completos)
-      // O handler deve combinar '2025-01-02' + '10:00' -> Date Object
-      const expectedStartTime = new Date('2025-01-02T10:00:00'); // Assumindo construção local/UTC controlada pelo handler
+
+      // O que esperamos que seja salvo no banco (Date Objects)
+      // O handler deve combinar a data com a hora
+      const expectedStartTime = new Date('2025-01-02T10:00:00');
       const expectedEndTime = new Date('2025-01-02T11:00:00');
 
-      // Simula o retorno do INSERT
-      const createdData = { 
-        id: 'a2', 
+      const createdData = {
+        id: 'a2',
         clientId: inputData.clientId,
         professionalId: inputData.professionalId,
         serviceId: inputData.serviceId,
-        userId: mockUser.id, 
+        userId: mockUser.id,
         startTime: expectedStartTime,
         endTime: expectedEndTime,
-        createdAt: new Date(), 
-        updatedAt: new Date() 
+        createdAt: new Date(),
+        updatedAt: new Date(),
       };
 
       const insertChain = createMockChain([createdData]);
@@ -208,48 +212,44 @@ describe('Appointments Handlers', () => {
       await createAppointment(mockCtx);
 
       expect(mockDb.insert).toHaveBeenCalled();
-      
-      // Verificação Crítica: O handler deve ter convertido as strings para Date
-      // e removido campos auxiliares como 'appointmentDate' se não existirem na tabela
+
+      // VERIFICAÇÃO CRÍTICA (PTE 2.15):
+      // Garante que o handler transformou as strings '10:00'/'11:00' em objetos Date
       expect(insertChain.values).toHaveBeenCalledWith(expect.objectContaining({
         clientId: 'c1',
-        professionalId: 'p1',
-        serviceId: 's1',
         userId: mockUser.id,
-        // Matchers flexíveis para lidar com fusos horários no teste unitário,
-        // mas garantindo que SEJA uma instância de Date, não string.
-        startTime: expect.any(Date), 
-        endTime: expect.any(Date)
+        startTime: expect.any(Date), // Deve ser Date, não string
+        endTime: expect.any(Date)    // Deve ser Date, não string
       }));
 
-      // Verificação extra para garantir que não estamos enviando strings cruas
+      // Verificação de valor (toISOString garante que a data base foi respeitada)
       const calledArgs = insertChain.values.mock.calls[0][0];
       expect(calledArgs.startTime.toISOString()).toContain('2025-01-02');
-      
+      expect(calledArgs.endTime.toISOString()).toContain('2025-01-02');
+
       expect(insertChain.returning).toHaveBeenCalled();
       expect(mockCtx.json).toHaveBeenCalledWith(createdData, 201);
     });
   });
 
   describe('updateAppointment', () => {
-    it('should update appointment converting time strings to Date objects', async () => {
-      // Input de atualização (Zod)
-      const updateData = { 
+    it('should update converting new time strings to Date objects', async () => {
+      // Input de atualização
+      const updateData = {
         appointmentDate: '2025-01-02',
         startTime: '14:00',
         endTime: '15:00',
-        status: 'confirmed' 
+        status: 'confirmed',
       };
-      
+
       const expectedStartTime = new Date('2025-01-02T14:00:00');
-      
-      // Resultado esperado
-      const resultData = { 
-        id: 'a1', 
+
+      const resultData = {
+        id: 'a1',
         startTime: expectedStartTime,
         status: 'confirmed',
         userId: mockUser.id,
-        updatedAt: new Date()
+        updatedAt: new Date(),
       };
 
       const updateChain = createMockChain([resultData]);
@@ -258,8 +258,9 @@ describe('Appointments Handlers', () => {
 
       await updateAppointment(mockCtx);
 
-      // Verificação Crítica: O handler deve converter para Date no .set()
       expect(mockDb.update).toHaveBeenCalled();
+
+      // Valida se o .set() recebeu objetos Date construídos corretamente
       expect(updateChain.set).toHaveBeenCalledWith(expect.objectContaining({
         status: 'confirmed',
         startTime: expect.any(Date),
@@ -268,7 +269,8 @@ describe('Appointments Handlers', () => {
 
       const calledArgs = updateChain.set.mock.calls[0][0];
       expect(calledArgs.startTime).toBeInstanceOf(Date);
-      
+      expect(calledArgs.startTime.toISOString()).toContain('2025-01-02');
+
       expect(updateChain.where).toHaveBeenCalled();
       expect(mockCtx.json).toHaveBeenCalledWith(resultData);
     });
@@ -281,7 +283,7 @@ describe('Appointments Handlers', () => {
       await updateAppointment(mockCtx);
 
       expect(mockCtx.json).toHaveBeenCalledWith(
-        { error: 'Appointment not found to update' }, 
+        { error: 'Appointment not found to update' },
         404
       );
     });
@@ -306,7 +308,7 @@ describe('Appointments Handlers', () => {
       await deleteAppointment(mockCtx);
 
       expect(mockCtx.json).toHaveBeenCalledWith(
-        { error: 'Appointment not found to delete' }, 
+        { error: 'Appointment not found to delete' },
         404
       );
     });

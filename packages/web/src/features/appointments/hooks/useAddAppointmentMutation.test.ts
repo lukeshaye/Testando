@@ -7,7 +7,7 @@
  * Testes para o hook useAddAppointmentMutation.
  * Conforme o Princípio do Teste Eficaz (PTE 2.15), este teste deve
  * zombar (mock) as chamadas de API (fetch) e verificar se:
- * 1. O 'fetch' é chamado com os dados corretos (método POST, body).
+ * 1. O 'fetch' é chamado com os dados TRANSFORMADOS (Date -> HH:MM string).
  * 2. As queries são invalidadas no 'onSuccess' (PGEC 2.13).
  * 3. O estado de erro é tratado corretamente.
  */
@@ -28,17 +28,22 @@ const mockFormData: AppointmentFormData = {
   clientId: 1,
   professionalId: 1,
   serviceId: 1,
-  // Zod schema espera 'Date', que será stringificado para ISO no fetch
-  appointment_date: new Date('2025-10-20T14:00:00Z'),
-  end_date: new Date('2025-10-20T15:00:00Z'),
+  // Inputs do formulário são objetos Date
+  appointment_date: new Date('2025-10-20T14:00:00'),
+  end_date: new Date('2025-10-20T15:00:00'),
   notes: 'Consulta de rotina',
 };
 
+// Resposta simulada da API (o que retorna após a criação)
 const mockApiResponse = {
   id: 101,
-  ...mockFormData,
-  start: mockFormData.appointment_date.toISOString(), // API geralmente retorna ISO
-  end: mockFormData.end_date.toISOString(), // API geralmente retorna ISO
+  clientId: 1,
+  professionalId: 1,
+  serviceId: 1,
+  appointmentDate: '2025-10-20',
+  startTime: '14:00',
+  endTime: '15:00',
+  notes: 'Consulta de rotina',
   createdAt: new Date().toISOString(),
   updatedAt: new Date().toISOString(),
 };
@@ -68,7 +73,6 @@ global.fetch = vi.fn();
 describe('useAddAppointmentMutation (PTE 2.15)', () => {
   beforeEach(() => {
     vi.mocked(global.fetch).mockClear();
-    // Limpa o spy se o queryClient foi criado em um teste anterior
     if (queryClient) {
       vi.mocked(queryClient.invalidateQueries).mockClear();
     }
@@ -79,7 +83,7 @@ describe('useAddAppointmentMutation (PTE 2.15)', () => {
   });
 
   // Teste de sucesso (onSuccess e invalidação de cache)
-  it('should call fetch with POST and invalidate queries on success (PGEC 2.13)', async () => {
+  it('should transform data and call fetch with correct payload (PGEC 2.13 & PTE 2.15)', async () => {
     vi.mocked(global.fetch).mockResolvedValue({
       ok: true,
       json: async () => mockApiResponse,
@@ -96,16 +100,34 @@ describe('useAddAppointmentMutation (PTE 2.15)', () => {
     // Aguarda a mutação ser bem-sucedida
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
-    // 1. Verifica se o fetch foi chamado corretamente
+    // 1. Verifica se o fetch foi chamado (PTE 2.15)
     expect(global.fetch).toHaveBeenCalledTimes(1);
-    expect(global.fetch).toHaveBeenCalledWith('/api/appointments', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      // Verifica se o body foi stringificado corretamente (datas viram ISO)
-      body: JSON.stringify(mockFormData),
-    });
+
+    // Recupera a chamada para inspecionar o body
+    const [url, options] = vi.mocked(global.fetch).mock.calls[0];
+    
+    expect(url).toBe('/api/appointments');
+    expect(options?.method).toBe('POST');
+    
+    // Parse do body para verificar a transformação de dados (Date -> String HH:MM)
+    const bodyPayload = JSON.parse(options?.body as string);
+
+    // Verifica se os campos foram mapeados corretamente conforme o plano de correção
+    expect(bodyPayload).toEqual(expect.objectContaining({
+      clientId: 1,
+      professionalId: 1,
+      serviceId: 1,
+      // A API espera 'appointmentDate' (camelCase) e strings de hora separadas
+      // O hook deve extrair YYYY-MM-DD e HH:MM dos objetos Date
+      appointmentDate: expect.stringMatching(/2025-10-20/), 
+      startTime: '14:00',
+      endTime: '15:00',
+      notes: 'Consulta de rotina'
+    }));
+
+    // Garante que os campos "crus" do formulário NÃO foram enviados
+    expect(bodyPayload).not.toHaveProperty('appointment_date');
+    expect(bodyPayload).not.toHaveProperty('end_date');
 
     // 2. Verifica o PGEC (2.13): invalidação de cache
     expect(queryClient.invalidateQueries).toHaveBeenCalledTimes(1);
@@ -131,17 +153,12 @@ describe('useAddAppointmentMutation (PTE 2.15)', () => {
       wrapper,
     });
 
-    // Executa a mutação
     result.current.mutate(mockFormData);
 
-    // Aguarda a mutação falhar
     await waitFor(() => expect(result.current.isError).toBe(true));
 
-    // 1. Verifica a mensagem de erro
     expect(result.current.error).toBeInstanceOf(Error);
     expect(result.current.error.message).toBe(errorResponse.message);
-
-    // 2. Verifica se o cache NÃO foi invalidado
     expect(queryClient.invalidateQueries).not.toHaveBeenCalled();
   });
 
@@ -164,7 +181,6 @@ describe('useAddAppointmentMutation (PTE 2.15)', () => {
 
     await waitFor(() => expect(result.current.isError).toBe(true));
 
-    // Verifica se a mensagem de fallback foi usada
     expect(result.current.error).toBeInstanceOf(Error);
     expect(result.current.error.message).toBe(
       'Falha ao adicionar o agendamento',

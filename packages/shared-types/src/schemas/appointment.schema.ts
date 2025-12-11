@@ -2,29 +2,25 @@ import { z } from 'zod';
 
 /**
  * CONSTANTES DE VALIDAÇÃO
- * Princípio 2.2 (DRY): Centralizamos o Regex de hora para garantir consistência. [cite: 14]
+ * Removido TIME_REGEX pois adotamos a validação direta de Date objects.
+ * Princípio 2.4 (YAGNI): Não precisamos de regex se não vamos fazer parsing manual. [cite: 29]
  */
-// Regex estrito: exige 2 dígitos para hora (rejeita "9:00", exige "09:00")
-// Princípio 2.16 (DSpP): Zero Trust - rejeita formatos ambíguos. [cite: 108]
-const TIME_REGEX = /^([01][0-9]|2[0-3]):[0-5][0-9]$/; // Formato HH:MM (00:00 a 23:59)
 
 /**
- * SCHEMA BASE DE AGENDAMENTO (Formulário)
- * Refatoração Padrão Ouro: Conversão para camelCase.
- * Princípio 2.16 (DSpP): Validação de borda robusta. [cite: 108]
- * Princípio 2.12 (CQRS): Otimizado para operação de escrita. [cite: 75]
+ * SCHEMA BASE DE AGENDAMENTO (Campos Comuns)
+ * Princípio 2.2 (DRY): Definimos os campos comuns uma única vez. [cite: 15]
  */
 const AppointmentFormBaseSchema = z.object({
   clientId: z.number({ required_error: "Cliente é obrigatório" }).int().positive(),
   professionalId: z.number({ required_error: "Profissional é obrigatório" }).int().positive(),
   serviceId: z.number({ required_error: "Serviço é obrigatório" }).int().positive(),
   
-  // z.coerce.date() facilita o binding com inputs HTML que retornam string
+  // Representa a data e hora de INÍCIO
   appointmentDate: z.coerce.date({
     required_error: 'A data do agendamento é obrigatória.',
   }),
 
-  // Para formulários, usamos endDate como Date object completo
+  // Representa a data e hora de TÉRMINO
   endDate: z.coerce.date({
     required_error: 'A data/hora de término é obrigatória.',
   }),
@@ -34,75 +30,28 @@ const AppointmentFormBaseSchema = z.object({
 });
 
 /**
- * SCHEMA DE CRIAÇÃO DE AGENDAMENTO (Formulário)
- * Este schema é usado para formulários que trabalham com Date objects.
+ * SCHEMA DE CRIAÇÃO DE AGENDAMENTO (Formulário & API)
+ * Correção Crítica (Opção B do Plano):
+ * Unificamos a lógica. Agora a API aceita objetos Date completos (ISO Strings), 
+ * eliminando a necessidade de conversão manual de strings "HH:MM" e corrigindo o conflito com o Frontend.
+ * * Princípio 2.3 (KISS): Removemos a complexidade de parsing de hora. [cite: 23]
+ * Princípio 2.15 (PTE): A validação torna-se determinística usando objetos Date nativos. 
  */
-export const AppointmentFormSchema = AppointmentFormBaseSchema.refine((data) => {
-  /**
-   * LÓGICA DE VALIDAÇÃO TEMPORAL
-   * Princípio 2.15 (PTE): Lógica determinística e isolada. 
-   * Valida que endDate é posterior a appointmentDate.
-   */
+export const CreateAppointmentSchema = AppointmentFormBaseSchema.refine((data) => {
+  // Validação simples e robusta: O fim deve ser após o início.
   return data.endDate > data.appointmentDate;
 }, {
   message: "O horário de término deve ser posterior ao início.",
-  path: ["endDate"], // Aponta o erro especificamente para o campo endDate
+  path: ["endDate"], // Aponta o erro para o campo endDate
 });
 
-/**
- * SCHEMA DE CRIAÇÃO DE AGENDAMENTO (API)
- * Refatoração Padrão Ouro: Conversão para camelCase (startTime, endTime).
- * Princípio 2.12 (CQRS): Otimizado para operação de escrita (separando data e hora). [cite: 75]
- */
-export const CreateAppointmentSchema = z.object({
-  clientId: z.number({ required_error: "Cliente é obrigatório" }).int().positive(),
-  professionalId: z.number({ required_error: "Profissional é obrigatório" }).int().positive(),
-  serviceId: z.number({ required_error: "Serviço é obrigatório" }).int().positive(),
-  
-  appointmentDate: z.coerce.date({
-    required_error: 'A data do agendamento é obrigatória.',
-  }),
-
-  // Validamos o formato da string de hora antes de processar a lógica
-  startTime: z.string().regex(TIME_REGEX, "Formato de hora inválido (HH:MM)"),
-  endTime: z.string().regex(TIME_REGEX, "Formato de hora inválido (HH:MM)"),
-
-  price: z.number().positive('O preço deve ser um valor positivo.'),
-  notes: z.string().optional(),
-})
-.refine((data) => {
-  /**
-   * LÓGICA DE VALIDAÇÃO TEMPORAL CORRIGIDA
-   * Correção: Bug de Timezone (UTC shift).
-   * Princípio 2.15 (PTE): Lógica determinística e isolada. 
-   */
-  try {
-    // CORREÇÃO: Não usamos mais .toISOString() para evitar o shift de data em UTC.
-    // Extraímos horas e minutos das strings validadas pelo Regex
-    const [startHour, startMinute] = data.startTime.split(':').map(Number);
-    const [endHour, endMinute] = data.endTime.split(':').map(Number);
-
-    // Clonamos a data base para garantir imutabilidade (Princípio 2.14) 
-    // e definimos a hora explicitamente, mantendo o dia/mês/ano original local.
-    const start = new Date(data.appointmentDate);
-    start.setHours(startHour, startMinute, 0, 0);
-
-    const end = new Date(data.appointmentDate);
-    end.setHours(endHour, endMinute, 0, 0);
-
-    return end > start;
-  } catch (e) {
-    return false; // Falha segura (DSpP) [cite: 110]
-  }
-}, {
-  message: "O horário de término deve ser posterior ao início.",
-  path: ["endTime"], // Aponta o erro especificamente para o campo endTime
-});
+// Mantemos o AppointmentFormSchema como um alias ou extensão se necessário no futuro,
+// mas por agora eles compartilham a mesma regra de negócio base.
+export const AppointmentFormSchema = CreateAppointmentSchema;
 
 /**
  * SCHEMA COMPLETO DE AGENDAMENTO (Banco de Dados)
- * Princípio 2.5 (SoC): Separação entre schema de criação e schema completo. [cite: 35]
- * Refatoração: createdAt e updatedAt em camelCase.
+ * Princípio 2.5 (SoC): Separação entre schema de entrada (Create) e schema de entidade (DB). 
  */
 export const AppointmentSchema = AppointmentFormBaseSchema.extend({
   id: z.number().int().positive(),

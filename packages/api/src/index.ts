@@ -9,7 +9,7 @@ import { Hono } from 'hono';
 import { Bindings, Variables } from './types';
 import {
   injectorMiddleware,
-  cors,
+  corsMiddleware, // CORREÇÃO 1: Importando o nome correto exportado pelo middleware.ts
   errorHandler,
 } from './core/middleware';
 
@@ -19,17 +19,19 @@ import { clientsRoutes } from './features/clients/clients.routes';
 import { professionalsRoutes } from './features/professionals/professionals.routes';
 import { servicesRoutes } from './features/services/services.routes';
 import { productsRoutes } from './features/products/products.routes';
-import { appointmentsRoutes } from './features/appointments/appointments.routes';
+// CORREÇÃO 2: Alterado para importação default, pois o arquivo exporta 'export default appointmentsRoutes'
+import appointmentsRoutes from './features/appointments/appointments.routes'; 
 import { financialRoutes } from './features/financial/financial.routes';
 import { settingsRoutes } from './features/settings/settings.routes';
-import dashboardRoutes from './features/dashboard/dashboard.routes'; // [Novo]
+import dashboardRoutes from './features/dashboard/dashboard.routes';
 
 // Criar app Hono com tipos
 const app = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
 // Registrar handler global de erro e aplicar middlewares globais
 app.onError(errorHandler);
-app.use('*', cors);
+// CORREÇÃO 3: Usando a função correta importada (corsMiddleware)
+app.use('*', corsMiddleware);
 app.use('*', injectorMiddleware);
 
 // Montar todas as rotas de feature
@@ -41,7 +43,7 @@ app.route('/api/products', productsRoutes);
 app.route('/api/appointments', appointmentsRoutes);
 app.route('/api/financial', financialRoutes);
 app.route('/api/settings', settingsRoutes);
-app.route('/api/dashboard', dashboardRoutes); // [Novo]
+app.route('/api/dashboard', dashboardRoutes);
 
 // Exportar app
 export default app;

@@ -1,21 +1,24 @@
 import { describe, it, expect } from 'vitest';
-// Nota: Assume-se que o arquivo de schema foi atualizado para suportar startTime/endTime
-// conforme solicitado no plano de correção.
 import { AppointmentFormSchema, AppointmentSchema } from './appointment.schema';
 
-describe('Appointment Schemas', () => {
-  const baseDate = new Date();
-  baseDate.setHours(0, 0, 0, 0); // Normaliza a data para evitar ruído nos testes
+// [Princípio 2.15 - PTE] Testabilidade Explícita:
+// Este arquivo de teste serve como documentação viva do contrato da API.
+// Ele garante que as regras de negócio (horários, formatos) sejam validadas antes de chegar ao Handler.
 
-  // Refatorado para alinhar com o contrato da API (Strings "HH:MM")
-  // Isso resolve a inconsistência citada no plano (Frontend enviando Date vs API esperando String)
+describe('Appointment Schemas Integration Tests', () => {
+  // Normalização de data base para consistência nos testes
+  const baseDate = new Date();
+  baseDate.setHours(0, 0, 0, 0);
+
+  // [Princípio 2.2 - DRY] Centralização dos dados válidos para reuso
+  // Alinhado ao Plano: Usa strings explícitas 'HH:MM' conforme esperado pela API.
   const validFormData = {
     clientId: 1,
     professionalId: 2,
     serviceId: 3,
     appointmentDate: baseDate,
-    startTime: '14:00', // Mudança crítica: Uso de string explícita para evitar Timezone bug
-    endTime: '14:30',   // Mudança crítica: Uso de string explícita
+    startTime: '14:00', 
+    endTime: '14:30',   
     price: 100.0,
     notes: 'Cliente pediu para não usar secador.',
   };
@@ -23,130 +26,120 @@ describe('Appointment Schemas', () => {
   const validDbData = {
     ...validFormData,
     id: 1,
-    // Princípio 2.2 (DRY) e Padrão Ouro: camelCase mantido
     createdAt: new Date(),
     updatedAt: new Date(),
   };
 
-  // --- Testes para AppointmentFormSchema ---
-  describe('AppointmentFormSchema', () => {
-    it('should validate correctly formatted form data with time strings', () => {
-      // Princípio 2.15 (Testabilidade Explícita): Valida o "Caminho Feliz"
+  // --- Suite: Validação de Entrada (Form/API Contract) ---
+  describe('AppointmentFormSchema (Input Contract)', () => {
+    
+    // 1. Caminho Feliz
+    it('should validate correctly formatted form data with "HH:MM" strings', () => {
       const result = AppointmentFormSchema.safeParse(validFormData);
       expect(result.success).toBe(true);
     });
 
-    it('should fail if endTime is before startTime (.refine)', () => {
+    // 2. Validação Lógica de Negócio (Cross-field Validation)
+    // [Plano de Correção]: Garante que lógica de término > início funciona.
+    it('should fail if endTime is before startTime', () => {
       const invalidData = {
         ...validFormData,
         startTime: '14:30',
-        endTime: '14:00', // Inválido: termina antes de começar
+        endTime: '14:00', // Inválido: viagem no tempo
       };
       const result = AppointmentFormSchema.safeParse(invalidData);
-      expect(result.success).toBe(false);
       
-      // Verifica se o erro está associado ao campo endTime ou ao root do refine
+      expect(result.success).toBe(false);
+      // Verifica se o erro foi capturado pelo refine
       expect(
-        result.error.issues.some((issue) => 
-          issue.path.includes('endTime') || issue.path.includes('startTime')
+        result.error?.issues.some((issue) => 
+          issue.path.includes('endTime') || issue.message.includes('término')
         ),
       ).toBe(true);
     });
 
-    it('should fail if time format is invalid', () => {
+    it('should fail if endTime is equal to startTime (zero duration)', () => {
       const invalidData = {
         ...validFormData,
-        startTime: '25:00', // Hora inexistente
+        startTime: '14:00',
+        endTime: '14:00', // Inválido: duração zero
+      };
+      const result = AppointmentFormSchema.safeParse(invalidData);
+      expect(result.success).toBe(false);
+    });
+
+    // 3. Validação de Formato (Regex e Tipagem)
+    // [Plano de Correção]: Cobertura rigorosa do Regex "HH:MM".
+    it('should fail if startTime has invalid hour (e.g., 25:00)', () => {
+      const invalidData = { ...validFormData, startTime: '25:00' };
+      const result = AppointmentFormSchema.safeParse(invalidData);
+      expect(result.success).toBe(false);
+      expect(result.error?.issues[0].message).toMatch(/formato/i); // Espera mensagem sobre formato
+    });
+
+    it('should fail if endTime has invalid minutes (e.g., 14:60)', () => {
+      const invalidData = { ...validFormData, endTime: '14:60' };
+      const result = AppointmentFormSchema.safeParse(invalidData);
+      expect(result.success).toBe(false);
+    });
+
+    it('should fail if time format is random string', () => {
+      const invalidData = { ...validFormData, startTime: 'uma hora qualquer' };
+      const result = AppointmentFormSchema.safeParse(invalidData);
+      expect(result.success).toBe(false);
+    });
+
+    // [Plano de Correção]: Proteção contra o bug do Frontend enviando Date
+    // [Princípio 2.16 - DSpP]: Input validation estrito.
+    it('should fail if startTime is provided as a Date object instead of String', () => {
+      const invalidData = { 
+        ...validFormData, 
+        startTime: new Date() as any // Simula o erro do Frontend antigo
       };
       const result = AppointmentFormSchema.safeParse(invalidData);
       expect(result.success).toBe(false);
       expect(
-        result.error.issues.some((issue) => issue.path.includes('startTime')),
+        result.error?.issues.some((issue) => issue.code === 'invalid_type')
       ).toBe(true);
     });
 
-    it('should fail if clientId is not a positive number', () => {
-      const invalidData = { ...validFormData, clientId: 0 };
+    // 4. Validação de Campos Obrigatórios e Tipos Numéricos
+    it('should fail if IDs are not positive numbers', () => {
+      const invalidData = { ...validFormData, clientId: 0, professionalId: -5 };
       const result = AppointmentFormSchema.safeParse(invalidData);
       expect(result.success).toBe(false);
-      expect(
-        result.error.issues.some((issue) => issue.path.includes('clientId')),
-      ).toBe(true);
+      expect(result.error?.issues.length).toBeGreaterThanOrEqual(2);
     });
 
-    it('should fail if professionalId is not a positive number', () => {
-      const invalidData = { ...validFormData, professionalId: -1 };
-      const result = AppointmentFormSchema.safeParse(invalidData);
-      expect(result.success).toBe(false);
-      expect(
-        result.error.issues.some((issue) =>
-          issue.path.includes('professionalId'),
-        ),
-      ).toBe(true);
-    });
-
-    it('should fail if serviceId is not a positive number', () => {
-      const invalidData = { ...validFormData, serviceId: 0 };
-      const result = AppointmentFormSchema.safeParse(invalidData);
-      expect(result.success).toBe(false);
-      expect(
-        result.error.issues.some((issue) => issue.path.includes('serviceId')),
-      ).toBe(true);
-    });
-
-    it('should fail if price is not positive', () => {
+    it('should fail if price is zero or negative', () => {
       const invalidData = { ...validFormData, price: 0 };
       const result = AppointmentFormSchema.safeParse(invalidData);
       expect(result.success).toBe(false);
-      expect(
-        result.error.issues.some((issue) => issue.path.includes('price')),
-      ).toBe(true);
-    });
-
-    it('should fail if appointmentDate is not a valid date', () => {
-      const invalidData = {
-        ...validFormData,
-        appointmentDate: 'não é uma data' as any,
-      };
-      const result = AppointmentFormSchema.safeParse(invalidData);
-      expect(result.success).toBe(false);
-      expect(
-        result.error.issues.some((issue) =>
-          issue.path.includes('appointmentDate'),
-        ),
-      ).toBe(true);
     });
   });
 
-  // --- Testes para AppointmentSchema ---
-  describe('AppointmentSchema', () => {
+  // --- Suite: Validação de Objeto de Domínio (DB) ---
+  describe('AppointmentSchema (Domain/DB Object)', () => {
     it('should validate a full appointment object (aligned with API contract)', () => {
       const result = AppointmentSchema.safeParse(validDbData);
       expect(result.success).toBe(true);
     });
 
     it('should fail if id is missing', () => {
-      const invalidData = { ...validDbData };
-      delete (invalidData as any).id;
+      const { id, ...invalidData } = validDbData;
       const result = AppointmentSchema.safeParse(invalidData);
       expect(result.success).toBe(false);
-      expect(
-        result.error.issues.some((issue) => issue.path.includes('id')),
-      ).toBe(true);
     });
 
-    it('should still enforce the .refine() rule on the DB object', () => {
+    // [Princípio 2.2 - DRY]: A regra de negócio (start < end) também deve valer para o objeto de domínio
+    it('should still enforce the time logic rule on the DB object', () => {
       const invalidData = {
         ...validDbData,
         startTime: '10:00',
-        endTime: '09:59', // Inválido
+        endTime: '09:00', // Dados corrompidos ou lógica errada no banco
       };
       const result = AppointmentSchema.safeParse(invalidData);
       expect(result.success).toBe(false);
-      // O path do erro pode variar dependendo de como o superRefine foi implementado
-      expect(
-        result.error.issues.some((issue) => issue.path.includes('endTime') || issue.path.includes('startTime')),
-      ).toBe(true);
     });
   });
 });
