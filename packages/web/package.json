@@ -11,6 +11,7 @@
   "dependencies": {
     "@auth/core": "0.34.1",
     "@auth/supabase-adapter": "1.4.1",
+    "@salonflow/api": "workspace:*",
     "@salonflow/shared-types": "workspace:*",
     "@hookform/resolvers": "^5.2.2",
     "@radix-ui/react-alert-dialog": "^1.1.15",

@@ -2,29 +2,20 @@
  * @file: api.test.ts
  * @description: Teste para a camada de abstração de API (Hono RPC).
  *
- * Princípio Testado: PTE (2.15)  - O teste verifica a infraestrutura de comunicação
- * mockando o 'fetch' subjacente, garantindo que o cliente 'api' está configurado corretamente.
- *
- * Atualização: Migrado de Jest para Vitest conforme o plano de correção.
+ * Princípio Testado: PTE (2.15) - O teste verifica a infraestrutura de comunicação
+ * mockando o 'fetch' subjacente para garantir o comportamento correto do cliente 'api'.
  */
 
-// Importa utilitários do Vitest (Substituindo globais do Jest)
-import { describe, it, expect, beforeEach, vi } from 'vitest';
-
-// Importa o cliente 'api' real
+import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { api } from './api';
 
-// 1. Mock do 'global.fetch'
-// O cliente Hono RPC (hc) depende do fetch. Mockar o fetch global nos permite interceptar
-// as chamadas de rede e testar a URL e os parâmetros.
-// CORREÇÃO: Uso de vi.fn() em vez de jest.fn()
+// Criação do mock para o fetch
 const mockFetch = vi.fn();
 
-// Declara a mockagem do fetch no escopo global
-// CORREÇÃO: Uso de vi.stubGlobal é a prática recomendada no Vitest, mas atribuição direta também funciona.
-global.fetch = mockFetch as any;
+// Configura o mock no escopo global usando a API do Vitest (Prática recomendada)
+vi.stubGlobal('fetch', mockFetch);
 
-// A resposta mockada deve simular uma resposta JSON válida
+// Helper para criar respostas de sucesso padronizadas (DRY)
 const mockResponse = { message: 'Success from Hono RPC' };
 const createMockResponse = () =>
   Promise.resolve({
@@ -36,38 +27,36 @@ const createMockResponse = () =>
 
 describe('API Client (Hono RPC)', () => {
   beforeEach(() => {
-    // Limpa o mock do fetch antes de cada teste
-    // CORREÇÃO: Reset de estado usando a instância do vi
+    // Limpa o estado do mock antes de cada teste para garantir isolamento
     mockFetch.mockClear();
     
-    // Garante que a resposta mockada é configurada para simular sucesso
+    // Define o comportamento padrão de sucesso
     mockFetch.mockImplementation(createMockResponse);
   });
 
-  it('deve exportar a instância do cliente Hono RPC', () => {
-    // Verifica se o objeto 'api' foi exportado
+  afterEach(() => {
+    // Opcional: Garante que mocks globais sejam resetados
+    vi.clearAllMocks();
+  });
+
+  it('deve exportar a instância do cliente Hono RPC corretamente', () => {
     expect(api).toBeDefined();
-    // O objeto 'api' deve ter as propriedades de um cliente Hono.
-    // O teste verifica a existência de um método de chamada típico do hc.
+    // Verifica se a estrutura do cliente possui o método base esperado ($get é comum no Hono Client)
     expect(typeof (api as any)['$get']).toBe('function');
   });
 
-  it('deve fazer uma chamada GET com o prefixo "/api" (DIP, SoC)', async () => {
-    // 1. Simula uma chamada GET na rota raiz (index) do cliente RPC.
-    // Esta é a forma típica de chamar um endpoint RPC GET na raiz usando 'hc'.
+  it('deve realizar uma chamada GET utilizando o prefixo "/api" configurado (DIP)', async () => {
+    // 1. Simula uma chamada RPC na rota index
     await (api as any).index.$get();
 
-    // 2. Verifica se o fetch subjacente foi chamado
+    // 2. Verifica se a abstração chamou o fetch
     expect(mockFetch).toHaveBeenCalledTimes(1);
 
-    // 3. Verifica se a URL de chamada inclui o prefixo "/api" (configurado em api.ts)
-    // O Hono Client constrói a URL base + a rota.
+    // 3. Verifica se a URL foi construída corretamente com o prefixo
     const calledUrl = mockFetch.mock.calls[0][0];
-
-    // O teste verifica o prefixo básico.
     expect(calledUrl).toMatch(/^\/api\/.*/);
 
-    // 4. Verifica se o método HTTP é GET
+    // 4. Valida o método HTTP
     const calledOptions = mockFetch.mock.calls[0][1];
     expect(calledOptions.method).toBe('GET');
   });

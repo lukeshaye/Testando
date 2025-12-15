@@ -12,22 +12,17 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { z } from 'zod';
 // Importação do Tipo Compartilhado para garantir a "Fonte Única da Verdade" (DRY)
-import { AppointmentFormSchema, CreateAppointmentInput } from '@/packages/shared-types';
+import { AppointmentFormSchema } from '@/packages/shared-types';
+// Importação do Cliente RPC (Hono Client) para garantir Type Safety e DRY (Princípio 2.2)
+// Isso substitui o 'fetch' manual e centraliza a definição da rota (Princípio 2.9 - DIP)
+import { api } from '@/lib/api';
 
 // Define o tipo de dados do formulário com base no schema Zod
 type AppointmentFormData = z.infer<typeof AppointmentFormSchema>;
 
 /**
- * REMOVIDO: Interface manual 'CreateAppointmentPayload'.
- * Motivo: Violação do Princípio 2.2 (DRY)[cite: 16]. O contrato deve vir de @salonflow/shared-types.
- *
- * REMOVIDO: Funções 'formatTimeHHMM' e 'formatDateISO'.
- * Motivo: Violação do Princípio 2.3 (KISS)[cite: 24]. A API agora aceita datas ISO completas.
- */
-
-/**
  * Função de mutação (fetcher) que envia os dados do novo agendamento
- * para a API.
+ * para a API usando o cliente RPC.
  *
  * @param appointmentData Os dados validados do formulário.
  */
@@ -36,39 +31,35 @@ const addAppointment = async (
 ): Promise<any> => {
   /**
    * ADAPTER / MAPPER
-   * Constrói o payload usando a tipagem 'CreateAppointmentInput' oficial.
+   * Constrói o payload usando o cliente 'api' tipado.
    *
-   * Correções aplicadas:
-   * 1. Conversão explícita de IDs para Number para evitar erro de validação Zod "Expected number, received string".
-   * 2. Envio de datas completas (Date/ISO) em vez de strings separadas (HH:MM), restaurando o contrato (Princípio 2.1).
+   * Correções aplicadas (Plano Correção 3):
+   * 1. Substituição do fetch manual pelo método '$post' do cliente RPC.
+   * 2. Conversão explícita de IDs para Number.
+   * 3. Conversão de datas (Date) para ISO String (.toISOString()), pois o JSON
+   * do Hono RPC espera strings para serialização correta.
    */
-  const payload: CreateAppointmentInput = {
-    clientId: Number(appointmentData.clientId),
-    professionalId: Number(appointmentData.professionalId),
-    serviceId: Number(appointmentData.serviceId),
-    price: Number(appointmentData.price),
-    notes: appointmentData.notes,
-    // Envia o objeto Date diretamente (o JSON.stringify converterá para ISO String automaticamente)
-    appointmentDate: appointmentData.appointmentDate,
-    endDate: appointmentData.endDate,
-  };
-
-  const response = await fetch('/api/appointments', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
+  const response = await api.appointments.$post({
+    json: {
+      clientId: Number(appointmentData.clientId),
+      professionalId: Number(appointmentData.professionalId),
+      serviceId: Number(appointmentData.serviceId),
+      price: Number(appointmentData.price),
+      notes: appointmentData.notes,
+      // Conversão obrigatória para ISO String para transporte via JSON RPC
+      appointmentDate: appointmentData.appointmentDate.toISOString(),
+      endDate: appointmentData.endDate.toISOString(),
     },
-    body: JSON.stringify(payload),
   });
 
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));
-    throw new Error(
-      errorData.message || 'Falha ao adicionar o agendamento',
-    );
+    // Type assertion seguro pois sabemos que errorData é um objeto genérico aqui
+    const message = (errorData as any).message || 'Falha ao adicionar o agendamento';
+    throw new Error(message);
   }
 
-  return response.json();
+  return await response.json();
 };
 
 /**
