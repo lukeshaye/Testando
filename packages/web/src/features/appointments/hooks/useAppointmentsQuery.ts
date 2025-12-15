@@ -10,6 +10,7 @@
  */
 
 import { useQuery } from '@tanstack/react-query';
+import { api } from '@/lib/api';
 import type { AppointmentType } from '@/packages/shared-types';
 
 /**
@@ -25,32 +26,35 @@ interface UseAppointmentsQueryFilters {
 /**
  * Função de busca (fetcher) para os agendamentos.
  * É chamada pelo useQuery.
+ * * CORREÇÃO (Princípio 2.2 e 2.9): 
+ * Utiliza o cliente 'api' (Hono RPC) em vez de 'fetch' nativo.
+ * Isso garante tipagem forte e evita strings de URL hardcoded (DRY).
  */
 const fetchAppointments = async ({
   startDate,
   endDate,
   professionalId,
 }: UseAppointmentsQueryFilters): Promise<AppointmentType[]> => {
-  const params = new URLSearchParams();
-
-  // Formata as datas para strings ISO para a API
-  params.append('startDate', startDate.toISOString());
-  params.append('endDate', endDate.toISOString());
-
-  // Adiciona o ID profissional apenas se for um valor válido
-  if (professionalId) {
-    params.append('professionalId', professionalId.toString());
-  }
-
-  // O endpoint da API (ex: /api/appointments) é assumido
-  const response = await fetch(`/api/appointments?${params.toString()}`);
+  const response = await api.appointments.$get({
+    query: {
+      startDate: startDate.toISOString(),
+      endDate: endDate.toISOString(),
+      // Converte para string apenas se existir, compatível com URLSearchParams do backend
+      ...(professionalId ? { professionalId: professionalId.toString() } : {}),
+    },
+  });
 
   if (!response.ok) {
+    // O cliente RPC retorna um wrapper, precisamos extrair o erro se houver
     const errorData = await response.json().catch(() => ({}));
+    // @ts-expect-error: errorData pode ser any, mas assumimos message
     throw new Error(errorData.message || 'Falha ao buscar agendamentos');
   }
 
-  return response.json();
+  const data = await response.json();
+  
+  // Garantimos que o retorno bate com o tipo compartilhado
+  return data as unknown as AppointmentType[];
 };
 
 /**
