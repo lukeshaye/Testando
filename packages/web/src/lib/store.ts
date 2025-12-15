@@ -17,14 +17,10 @@ interface AppState {
 
 /**
  * Store global (Zustand) para gerenciar o Estado Global da UI (Nível 4).
- *
- * Conforme o PLANO_DE_FEATURE (Tarefa 4.6):
- * [cite_start]- [cite: 80, 81] Esta store adere estritamente ao PGEC (2.13) e SoC (2.5).
- * [cite_start]- [cite: 75, 76, 77] Ela *remove* intencionalmente todo o Estado do Servidor (Nível 3),
- * como 'clients', 'products', funções de fetch (ex: 'fetchClients'), e estados de 'loading'.
- * Essa lógica agora é gerenciada pelo React Query (Nível 3) e pela camada de API (lib/api.ts).
- * [cite_start]- [cite: 72, 73] Ela gerencia *apenas* o estado da UI, como 'isSidebarOpen' (para o layout)
- * e 'theme' (para alternância de tema).
+ * * Princípios aplicados:
+ * - PGEC (2.13): Gerencia apenas estado de UI global (Tema, Sidebar).
+ * - SoC (2.5): Separa responsabilidade de UI da lógica de dados (API).
+ * - Imutabilidade (2.14): O Zustand garante atualizações imutáveis do estado[cite: 93, 97].
  */
 export const useAppStore = create<AppState>()(
   persist(
@@ -58,7 +54,7 @@ export const useAppStore = create<AppState>()(
       name: 'app-ui-storage', // Nome da chave no localStorage
       storage: createJSONStorage(() => localStorage), // Usar localStorage
       
-      // Definir quais partes do estado devem ser persistidas
+      // Definir quais partes do estado devem ser persistidas (Whitelist)
       partialize: (state) => ({
         theme: state.theme,
         isSidebarOpen: state.isSidebarOpen,

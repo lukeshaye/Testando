@@ -4,7 +4,8 @@ import { describe, test, expect, beforeEach, afterEach, vi } from 'vitest';
 import { act } from '@testing-library/react';
 import { useAppStore } from './store';
 
-// Mock do localStorage para garantir um ambiente limpo
+// Mock do localStorage para garantir um ambiente limpo e controlado.
+// Isso alinha-se ao Princípio 2.15 (PTE) e 2.9 (DIP), isolando dependências externas.
 const localStorageMock = (() => {
   let store: Record<string, string> = {};
   return {
@@ -31,14 +32,13 @@ const initialState = useAppStore.getState();
 /**
  * Testes para a store global (Zustand) - lib/store.ts
  *
- * [cite_start]Conforme o PLANO_DE_FEATURE (Tarefa 4.6)[cite: 82]:
- * Estes testes são simplificados para focar *apenas* nas ações de
- * estado da UI (Nível 4).
- * Todos os mocks do Supabase e lógica de fetching (Nível 3)
- * foram removidos.
+ * Conforme o PLANO_DE_FEATURE e o Princípio 2.13 (PGEC):
+ * Estes testes focam apenas no Nível 4 (Estado Global de UI),
+ * garantindo que temas e sidebar funcionem sem efeitos colaterais.
  */
 describe('useAppStore (Zustand)', () => {
   // Garante que a store e o localStorage sejam resetados antes de CADA teste
+  // Isso satisfaz a necessidade de provas de corretude isoladas (Princípio 2.15).
   beforeEach(() => {
     act(() => {
       // Reseta a store para seu estado inicial
@@ -148,7 +148,9 @@ describe('useAppStore (Zustand)', () => {
     expect(localStorage.setItem).toHaveBeenCalledTimes(2);
     storedData = JSON.parse(localStorage.getItem(storageKey) || '{}');
     expect(storedData.state.theme).toBe('light');
-V    expect(storedData.state.isSidebarOpen).toBe(false);
+    
+    // CORREÇÃO: Removido o caractere 'V' que causava erro de sintaxe
+    expect(storedData.state.isSidebarOpen).toBe(false);
 
     // Verifica se as ações (funções) não estão sendo persistidas
     expect(storedData.state.toggleTheme).toBeUndefined();

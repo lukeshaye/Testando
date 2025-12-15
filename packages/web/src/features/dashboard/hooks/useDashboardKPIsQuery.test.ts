@@ -1,20 +1,31 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, waitFor } from '@testing-library/react';
 import { useDashboardKPIsQuery } from './useDashboardKPIsQuery';
-// 1. Substituição da importação da API pelo hook autenticado
-import { useAuthenticatedApi } from '@/hooks/useAuthenticatedApi';
+// Correção: Importamos a api real para que o vi.mock a substitua corretamente
+import { api } from '@/lib/api';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ReactNode } from 'react';
 
-// 2. Mock do hook de autenticação
-vi.mock('@/hooks/useAuthenticatedApi');
+// Correção: Definimos a função de mock fora do escopo para ser acessível nos testes
+const mockGetStats = vi.fn();
 
-// Wrapper para o React Query
+// Correção: Mock do módulo @/lib/api (Princípio 2.9 - Inversão de Dependência aplicada a testes)
+vi.mock('@/lib/api', () => ({
+  api: {
+    dashboard: {
+      stats: {
+        $get: mockGetStats,
+      },
+    },
+  },
+}));
+
+// Wrapper para o React Query (Princípio 2.12/2.13 - Suporte a Server State)
 const createWrapper = () => {
   const queryClient = new QueryClient({
     defaultOptions: {
       queries: {
-        retry: false,
+        retry: false, // Importante para testes falharem rápido
       },
     },
   });
@@ -24,22 +35,8 @@ const createWrapper = () => {
 };
 
 describe('useDashboardKPIsQuery', () => {
-  // Criamos o mock da função específica que será chamada
-  const mockGetStats = vi.fn();
-
   beforeEach(() => {
     vi.clearAllMocks();
-
-    // 3. Configuração do mock para retornar a estrutura da API
-    (useAuthenticatedApi as any).mockReturnValue({
-      api: {
-        dashboard: {
-          stats: {
-            $get: mockGetStats,
-          },
-        },
-      },
-    });
   });
 
   it('deve retornar os dados de KPI com sucesso', async () => {
@@ -49,7 +46,7 @@ describe('useDashboardKPIsQuery', () => {
       averageTicket: 200,
     };
 
-    // Mock da resposta de sucesso usando a função mockada
+    // Mock da resposta de sucesso simulando a estrutura do Hono/RPC
     mockGetStats.mockResolvedValue({
       ok: true,
       json: async () => mockData,
@@ -62,7 +59,7 @@ describe('useDashboardKPIsQuery', () => {
     // Verifica estado de loading inicial
     expect(result.current.isLoading).toBe(true);
 
-    // Aguarda o sucesso
+    // Aguarda o sucesso (Princípio 2.15 - Provar a corretude)
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
     // Verifica os dados e se a função foi chamada
