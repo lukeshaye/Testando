@@ -9,19 +9,21 @@ type AppContext = Context<{ Variables: Variables }>;
 /**
  * Handler para buscar todos os agendamentos (GET /)
  * * Princípios Aplicados:
- * - 2.12 (CQRS): Utilização de `db.query` para leitura otimizada e estruturada.
- * - 2.3 (KISS): Simplificação da query removendo joins manuais complexos.
- * - 2.15 (PTE): Adição de filtros obrigatórios para viabilizar testes de cenário.
+ * - 2.12 (CQRS): Utilização de `db.query` para leitura otimizada e estruturada[cite: 75].
+ * - 2.16 (Design Seguro): Sanitização de inputs da query string para garantir tipagem correta.
  */
 export const getAppointments = async (c: AppContext) => {
   const user = c.var.user;
   
-  // Extração de filtros da Query String (Princípio 2.1 - Planejamento/Dependências)
-  const { startDate, endDate, professionalId } = c.req.query();
+  // Extração de filtros da Query String (Princípio 2.1 - Planejamento/Dependências [cite: 7])
+  // CORREÇÃO: Hono retorna strings. É necessário converter IDs para Number para satisfazer o Schema do Drizzle.
+  const query = c.req.query();
+  const startDate = query.startDate;
+  const endDate = query.endDate;
+  const professionalId = query.professionalId ? Number(query.professionalId) : undefined;
 
   try {
     // Utilizando a Query API do Drizzle para retornar dados aninhados (Nested Relational Query)
-    // Isso satisfaz o contrato esperado pelo Frontend: { client: { name: ... } }
     const data = await c.var.db.query.appointments.findMany({
       where: (table, { eq, and, gte, lte }) => {
         // Montagem dinâmica dos filtros
@@ -35,6 +37,7 @@ export const getAppointments = async (c: AppContext) => {
           filters.push(lte(table.appointmentDate, new Date(endDate)));
         }
 
+        // CORREÇÃO: Agora 'professionalId' é um number (ou undefined), compatível com o schema do banco
         if (professionalId) {
           filters.push(eq(table.professionalId, professionalId));
         }
@@ -42,22 +45,14 @@ export const getAppointments = async (c: AppContext) => {
         return and(...filters);
       },
       with: {
-        // Trazendo relacionamentos aninhados conforme solicitado no plano
         client: {
-          columns: {
-            name: true,
-          },
+          columns: { name: true },
         },
         service: {
-          columns: {
-            name: true,
-            duration: true, // Útil para o frontend calcular visualização se necessário
-          },
+          columns: { name: true, duration: true },
         },
         professional: {
-            columns: {
-                name: true, // Necessário se houver filtro ou visualização por profissional
-            }
+            columns: { name: true }
         }
       },
       orderBy: (table, { desc }) => [desc(table.appointmentDate)],
@@ -72,11 +67,15 @@ export const getAppointments = async (c: AppContext) => {
 
 /**
  * Handler para buscar um agendamento específico (GET /:id)
- * Mantém a consistência de retorno aninhado do endpoint de listagem.
  */
 export const getAppointmentById = async (c: AppContext) => {
-  const { id } = c.req.param();
+  // CORREÇÃO: Conversão explícita para Number
+  const id = Number(c.req.param('id'));
   const user = c.var.user;
+
+  if (isNaN(id)) {
+      return c.json({ error: 'Invalid ID format' }, 400);
+  }
 
   try {
     const item = await c.var.db.query.appointments.findFirst({
@@ -85,15 +84,9 @@ export const getAppointmentById = async (c: AppContext) => {
         eq(table.userId, user.id)
       ),
       with: {
-        client: {
-          columns: { name: true },
-        },
-        service: {
-          columns: { name: true, price: true, description: true },
-        },
-        professional: {
-            columns: { name: true }
-        }
+        client: { columns: { name: true } },
+        service: { columns: { name: true, price: true, description: true } },
+        professional: { columns: { name: true } }
       },
     });
 
@@ -109,7 +102,7 @@ export const getAppointmentById = async (c: AppContext) => {
 
 /**
  * Handler para criar um novo agendamento (POST /)
- * [cite_start]Princípio 2.16 (Design Seguro): userId é injetado pelo backend[cite: 108].
+ * Princípio 2.16 (Design Seguro): userId é injetado pelo backend.
  */
 export const createAppointment = async (c: AppContext) => {
   const payload = c.req.valid('json');
@@ -122,15 +115,13 @@ export const createAppointment = async (c: AppContext) => {
       .insert(appointments)
       .values({
         ...rest,
-        // O Schema Zod já deve ter validado se são strings de data ou Dates
+        // O Schema Zod já validou e converteu strings ISO para objetos Date
         appointmentDate: appointmentDate, 
         endDate: endDate,                 
         userId: user.id,
       })
       .returning();
 
-    // Nota: Em um cenário ideal CQRS/REST, poderíamos retornar o objeto completo com relacionamentos
-    // fazendo um fetch imediato após o insert, mas manteremos o retorno simples do insert por performance.
     return c.json(data[0], 201);
   } catch (error) {
     console.error('Error creating appointment:', error);
@@ -140,18 +131,23 @@ export const createAppointment = async (c: AppContext) => {
 
 /**
  * Handler para atualizar um agendamento (PUT /:id)
- * [cite_start]Aplicação do Princípio 2.14 (Imutabilidade)[cite: 93].
+ * Aplicação do Princípio 2.14 (Imutabilidade)[cite: 93].
  */
 export const updateAppointment = async (c: AppContext) => {
-  const { id } = c.req.param();
+  // CORREÇÃO: Conversão explícita para Number
+  const id = Number(c.req.param('id'));
   const payload = c.req.valid('json');
   const user = c.var.user;
+
+  if (isNaN(id)) {
+    return c.json({ error: 'Invalid ID format' }, 400);
+  }
 
   try {
     // 1. Busca prévia (Segurança e Consistência)
     const existing = await c.var.db.query.appointments.findFirst({
         where: (table, { eq, and }) => and(eq(table.id, id), eq(table.userId, user.id)),
-        columns: { id: true } // Busca leve apenas para verificar existência
+        columns: { id: true }
     });
 
     if (!existing) {
@@ -159,7 +155,6 @@ export const updateAppointment = async (c: AppContext) => {
     }
 
     // 2. Preparação segura dos dados
-    // Removemos campos que não devem ser alterados manualmente
     const { 
       id: _id, 
       userId: _userId, 
@@ -174,7 +169,6 @@ export const updateAppointment = async (c: AppContext) => {
       updatedAt: new Date(),
     };
 
-    // Mapeamento direto (CamelCase -> Schema)
     if (appointmentDate) valuesToUpdate.appointmentDate = appointmentDate;
     if (endDate) valuesToUpdate.endDate = endDate;
 
@@ -196,8 +190,13 @@ export const updateAppointment = async (c: AppContext) => {
  * Handler para deletar um agendamento (DELETE /:id)
  */
 export const deleteAppointment = async (c: AppContext) => {
-  const { id } = c.req.param();
+  // CORREÇÃO: Conversão explícita para Number
+  const id = Number(c.req.param('id'));
   const user = c.var.user;
+
+  if (isNaN(id)) {
+    return c.json({ error: 'Invalid ID format' }, 400);
+  }
 
   try {
     const data = await c.var.db

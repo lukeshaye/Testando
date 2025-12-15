@@ -11,44 +11,19 @@
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { z } from 'zod';
-import { AppointmentFormSchema } from '@/packages/shared-types';
+// Importação do Tipo Compartilhado para garantir a "Fonte Única da Verdade" (DRY)
+import { AppointmentFormSchema, CreateAppointmentInput } from '@/packages/shared-types';
 
 // Define o tipo de dados do formulário com base no schema Zod
 type AppointmentFormData = z.infer<typeof AppointmentFormSchema>;
 
 /**
- * Interface do Payload da API (Contrato).
- * Define explicitamente o que a API espera receber, desacoplando
- * o formulário da requisição de rede.
+ * REMOVIDO: Interface manual 'CreateAppointmentPayload'.
+ * Motivo: Violação do Princípio 2.2 (DRY)[cite: 16]. O contrato deve vir de @salonflow/shared-types.
+ *
+ * REMOVIDO: Funções 'formatTimeHHMM' e 'formatDateISO'.
+ * Motivo: Violação do Princípio 2.3 (KISS)[cite: 24]. A API agora aceita datas ISO completas.
  */
-interface CreateAppointmentPayload {
-  clientId: string;
-  professionalId: string;
-  serviceId: string;
-  price: number;
-  appointmentDate: string; // YYYY-MM-DD
-  startTime: string;       // HH:MM
-  endTime: string;         // HH:MM
-  notes?: string;
-}
-
-/**
- * Função auxiliar para extrair HH:MM de um objeto Date.
- * Garante consistência e evita dependência de locale do navegador.
- * Princípio 2.3 KISS.
- */
-const formatTimeHHMM = (date: Date): string => {
-  const hours = date.getHours().toString().padStart(2, '0');
-  const minutes = date.getMinutes().toString().padStart(2, '0');
-  return `${hours}:${minutes}`;
-};
-
-/**
- * Função auxiliar para extrair YYYY-MM-DD de um objeto Date.
- */
-const formatDateISO = (date: Date): string => {
-  return date.toISOString().split('T')[0];
-};
 
 /**
  * Função de mutação (fetcher) que envia os dados do novo agendamento
@@ -59,21 +34,23 @@ const formatDateISO = (date: Date): string => {
 const addAppointment = async (
   appointmentData: AppointmentFormData,
 ): Promise<any> => {
-  // ADAPTER / MAPPER
-  // Transforma os objetos Date do formulário nas strings que a API espera.
-  // Resolve a inconsistência de contrato apontada no plano de correção.
-  const payload: CreateAppointmentPayload = {
-    clientId: appointmentData.clientId,
-    professionalId: appointmentData.professionalId,
-    serviceId: appointmentData.serviceId,
-    price: appointmentData.price,
+  /**
+   * ADAPTER / MAPPER
+   * Constrói o payload usando a tipagem 'CreateAppointmentInput' oficial.
+   *
+   * Correções aplicadas:
+   * 1. Conversão explícita de IDs para Number para evitar erro de validação Zod "Expected number, received string".
+   * 2. Envio de datas completas (Date/ISO) em vez de strings separadas (HH:MM), restaurando o contrato (Princípio 2.1).
+   */
+  const payload: CreateAppointmentInput = {
+    clientId: Number(appointmentData.clientId),
+    professionalId: Number(appointmentData.professionalId),
+    serviceId: Number(appointmentData.serviceId),
+    price: Number(appointmentData.price),
     notes: appointmentData.notes,
-    // Extrai a data (YYYY-MM-DD)
-    appointmentDate: formatDateISO(appointmentData.appointmentDate),
-    // Extrai o horário de início (HH:MM)
-    startTime: formatTimeHHMM(appointmentData.appointmentDate),
-    // Extrai o horário de término (HH:MM)
-    endTime: formatTimeHHMM(appointmentData.endDate),
+    // Envia o objeto Date diretamente (o JSON.stringify converterá para ISO String automaticamente)
+    appointmentDate: appointmentData.appointmentDate,
+    endDate: appointmentData.endDate,
   };
 
   const response = await fetch('/api/appointments', {

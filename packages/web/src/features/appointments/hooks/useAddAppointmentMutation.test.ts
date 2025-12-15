@@ -5,11 +5,12 @@
  * (REVISADO) - Tarefa 4.8: Feature - Appointments (CRUD Padrão)
  *
  * Testes para o hook useAddAppointmentMutation.
- * Conforme o Princípio do Teste Eficaz (PTE 2.15), este teste deve
- * zombar (mock) as chamadas de API (fetch) e verificar se:
- * 1. O 'fetch' é chamado com os dados TRANSFORMADOS (Date -> HH:MM string).
- * 2. As queries são invalidadas no 'onSuccess' (PGEC 2.13).
- * 3. O estado de erro é tratado corretamente.
+ * ATUALIZADO conforme Plano de Correção 2.
+ *
+ * Mudanças:
+ * 1. O payload agora deve enviar datas ISO completas (appointmentDate, endDate).
+ * 2. Campos 'startTime' e 'endTime' foram removidos (KISS/DRY).
+ * 3. IDs devem ser numéricos.
  */
 
 import { renderHook, waitFor } from '@testing-library/react';
@@ -25,24 +26,26 @@ type AppointmentFormData = z.infer<typeof AppointmentFormSchema>;
 
 // 1. Mock de Dados
 const mockFormData: AppointmentFormData = {
+  // Garante que são números (conforme correção de Incompatibilidade de Tipagem)
   clientId: 1,
   professionalId: 1,
   serviceId: 1,
   // Inputs do formulário são objetos Date
-  appointment_date: new Date('2025-10-20T14:00:00'),
-  end_date: new Date('2025-10-20T15:00:00'),
+  appointment_date: new Date('2025-10-20T14:00:00.000Z'),
+  end_date: new Date('2025-10-20T15:00:00.000Z'),
   notes: 'Consulta de rotina',
+  price: 100 // Adicionado campo obrigatório do schema se necessário, ou opcional
 };
 
-// Resposta simulada da API (o que retorna após a criação)
+// Resposta simulada da API
 const mockApiResponse = {
   id: 101,
   clientId: 1,
   professionalId: 1,
   serviceId: 1,
-  appointmentDate: '2025-10-20',
-  startTime: '14:00',
-  endTime: '15:00',
+  // A resposta da API agora refletirá o formato ISO
+  appointmentDate: '2025-10-20T14:00:00.000Z',
+  endDate: '2025-10-20T15:00:00.000Z',
   notes: 'Consulta de rotina',
   createdAt: new Date().toISOString(),
   updatedAt: new Date().toISOString(),
@@ -83,7 +86,7 @@ describe('useAddAppointmentMutation (PTE 2.15)', () => {
   });
 
   // Teste de sucesso (onSuccess e invalidação de cache)
-  it('should transform data and call fetch with correct payload (PGEC 2.13 & PTE 2.15)', async () => {
+  it('should send Date objects as ISO strings and numeric IDs (DRY 2.2 & PTE 2.15)', async () => {
     vi.mocked(global.fetch).mockResolvedValue({
       ok: true,
       json: async () => mockApiResponse,
@@ -103,31 +106,33 @@ describe('useAddAppointmentMutation (PTE 2.15)', () => {
     // 1. Verifica se o fetch foi chamado (PTE 2.15)
     expect(global.fetch).toHaveBeenCalledTimes(1);
 
-    // Recupera a chamada para inspecionar o body
     const [url, options] = vi.mocked(global.fetch).mock.calls[0];
     
     expect(url).toBe('/api/appointments');
     expect(options?.method).toBe('POST');
     
-    // Parse do body para verificar a transformação de dados (Date -> String HH:MM)
+    // Parse do body para verificar a transformação de dados
     const bodyPayload = JSON.parse(options?.body as string);
 
-    // Verifica se os campos foram mapeados corretamente conforme o plano de correção
+    // VERIFICAÇÃO CRÍTICA DO PLANO DE CORREÇÃO 2:
+    // O hook deve enviar os dados conforme o Shared Schema (Date ISOs e Numbers)
     expect(bodyPayload).toEqual(expect.objectContaining({
-      clientId: 1,
-      professionalId: 1,
-      serviceId: 1,
-      // A API espera 'appointmentDate' (camelCase) e strings de hora separadas
-      // O hook deve extrair YYYY-MM-DD e HH:MM dos objetos Date
-      appointmentDate: expect.stringMatching(/2025-10-20/), 
-      startTime: '14:00',
-      endTime: '15:00',
+      clientId: 1,       // Deve ser número
+      professionalId: 1, // Deve ser número
+      serviceId: 1,      // Deve ser número
       notes: 'Consulta de rotina'
     }));
 
-    // Garante que os campos "crus" do formulário NÃO foram enviados
-    expect(bodyPayload).not.toHaveProperty('appointment_date');
-    expect(bodyPayload).not.toHaveProperty('end_date');
+    // Verifica se as datas foram enviadas como strings ISO completas
+    // Isso valida que o hook removeu a lógica de separação HH:MM (KISS 2.23)
+    expect(bodyPayload.appointmentDate).toBe(mockFormData.appointment_date.toISOString());
+    expect(bodyPayload.endDate).toBe(mockFormData.end_date.toISOString());
+
+    // Garante que campos antigos e "crus" NÃO foram enviados
+    expect(bodyPayload).not.toHaveProperty('startTime');       // Campo removido no novo contrato
+    expect(bodyPayload).not.toHaveProperty('endTime');         // Campo removido no novo contrato
+    expect(bodyPayload).not.toHaveProperty('appointment_date'); // Campo snake_case do form
+    expect(bodyPayload).not.toHaveProperty('end_date');         // Campo snake_case do form
 
     // 2. Verifica o PGEC (2.13): invalidação de cache
     expect(queryClient.invalidateQueries).toHaveBeenCalledTimes(1);
