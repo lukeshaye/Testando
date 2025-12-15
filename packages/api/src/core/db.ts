@@ -1,6 +1,34 @@
-[
-  {
-    "file": "/packages/api/src/core/db.ts",
-    "content": "/*\n * Arquivo: /packages/api/src/core/db.ts\n * O Quê (Lógica): Abstrair a criação dos clientes de DB (Drizzle) e Auth (Supabase).\n * DIP (2.9) / Pilar 24: Este arquivo é a \"fábrica\" que lê Env Vars genéricas\n * e instancia clientes específicos.\n */\n\nimport { drizzle, type PostgresJsDatabase } from 'drizzle-orm/postgres-js'; // \nimport postgres from 'postgres'; // \nimport { createClient, type SupabaseClient } from '@supabase/supabase-js'; // \nimport type { Bindings } from '../types';\n\n// O schema virá do Módulo 2 (PLANO_DE_FEATURE_MOD2)\n// Assumindo que o módulo 2 (db-schema) está disponível no monorepo\n// como '@salonflow/db-schema'\nimport * as schema from '@salonflow/db-schema';\n\n/**\n * Cria e retorna um cliente Drizzle conectado ao banco de dados.\n * Utiliza a URL genérica do banco de dados das bindings.\n */\nexport function createDbClient(\n  env: Bindings\n): PostgresJsDatabase<typeof schema> { \n  const queryClient = postgres(env.DATABASE_URL); // \n  return drizzle(queryClient, { schema }); // \n}\n\n/**\n * Cria e retorna um cliente de autenticação (Supabase).\n * Utiliza a URL e a Chave genéricas do provedor de auth das bindings.\n */\nexport function createAuthClient(env: Bindings): SupabaseClient {\n  return createClient(env.AUTH_PROVIDER_URL, env.AUTH_PROVIDER_KEY); // \n}\n"
-  }
-]
+/*
+ * Arquivo: /packages/api/src/core/db.ts
+ * O Quê (Lógica): Abstrair a criação dos clientes de DB (Drizzle) e Auth (Supabase).
+ * DIP (2.9): Este arquivo é a "fábrica" que lê Env Vars genéricas e instancia clientes específicos.
+ */
+
+import { drizzle, type PostgresJsDatabase } from 'drizzle-orm/postgres-js';
+import postgres from 'postgres';
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import type { Bindings } from '../types';
+
+// Correção aplicada: Importação ajustada para '@repo/db' conforme o plano de correção.
+// Isso centraliza o conhecimento do schema (DRY 2.2).
+import * as schema from '@repo/db';
+
+/**
+ * Cria e retorna um cliente Drizzle conectado ao banco de dados.
+ * Utiliza a URL genérica do banco de dados das bindings.
+ * * Princípio KISS (2.3): Mantém a inicialização simples e direta.
+ */
+export function createDbClient(
+  env: Bindings
+): PostgresJsDatabase<typeof schema> { 
+  const queryClient = postgres(env.DATABASE_URL);
+  return drizzle(queryClient, { schema });
+}
+
+/**
+ * Cria e retorna um cliente de autenticação (Supabase).
+ * Utiliza a URL e a Chave genéricas do provedor de auth das bindings.
+ */
+export function createAuthClient(env: Bindings): SupabaseClient {
+  return createClient(env.AUTH_PROVIDER_URL, env.AUTH_PROVIDER_KEY);
+}

@@ -8,7 +8,7 @@ import { z } from 'zod';
 
 /**
  * SCHEMA BASE DE AGENDAMENTO (Campos Comuns)
- * Princípio 2.2 (DRY): Definimos os campos comuns uma única vez. [cite: 15]
+ * Princípio 2.2 (DRY): Definimos os campos comuns uma única vez. 
  */
 const AppointmentFormBaseSchema = z.object({
   clientId: z.number({ required_error: "Cliente é obrigatório" }).int().positive(),
@@ -34,7 +34,7 @@ const AppointmentFormBaseSchema = z.object({
  * Correção Crítica (Opção B do Plano):
  * Unificamos a lógica. Agora a API aceita objetos Date completos (ISO Strings), 
  * eliminando a necessidade de conversão manual de strings "HH:MM" e corrigindo o conflito com o Frontend.
- * * Princípio 2.3 (KISS): Removemos a complexidade de parsing de hora. [cite: 23]
+ * * Princípio 2.3 (KISS): Removemos a complexidade de parsing de hora. 
  * Princípio 2.15 (PTE): A validação torna-se determinística usando objetos Date nativos. 
  */
 export const CreateAppointmentSchema = AppointmentFormBaseSchema.refine((data) => {
@@ -48,6 +48,14 @@ export const CreateAppointmentSchema = AppointmentFormBaseSchema.refine((data) =
 // Mantemos o AppointmentFormSchema como um alias ou extensão se necessário no futuro,
 // mas por agora eles compartilham a mesma regra de negócio base.
 export const AppointmentFormSchema = CreateAppointmentSchema;
+
+/**
+ * SCHEMA DE ATUALIZAÇÃO DE AGENDAMENTO (Correção Item 3 do Plano)
+ * Princípio 2.2 (DRY): Reutilizamos a base tornando os campos opcionais via .partial(). 
+ * Nota: Utilizamos o BaseSchema (sem refine) para permitir atualizações parciais de campos isolados
+ * sem disparar erro de comparação de datas caso um deles não seja enviado.
+ */
+export const UpdateAppointmentSchema = AppointmentFormBaseSchema.partial();
 
 /**
  * SCHEMA COMPLETO DE AGENDAMENTO (Banco de Dados)
@@ -68,4 +76,5 @@ export const AppointmentSchema = AppointmentFormBaseSchema.extend({
 // Tipos inferidos para uso no Frontend e Backend
 export type CreateAppointmentInput = z.infer<typeof CreateAppointmentSchema>;
 export type AppointmentFormInput = z.infer<typeof AppointmentFormSchema>;
+export type UpdateAppointmentInput = z.infer<typeof UpdateAppointmentSchema>;
 export type Appointment = z.infer<typeof AppointmentSchema>;

@@ -13,7 +13,9 @@
     "@hono/zod-validator": "^0.2.0",
     "drizzle-orm": "^0.31.2",
     "postgres": "^3.4.4",
-    "@supabase/supabase-js": "^2.44.4"
+    "@supabase/supabase-js": "^2.44.4",
+    "@salonflow/shared-types": "workspace:*",
+    "@repo/db": "workspace:*"
   },
   "devDependencies": {
     "vitest": "^1.6.0",

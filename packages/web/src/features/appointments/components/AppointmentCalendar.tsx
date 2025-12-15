@@ -3,7 +3,7 @@
  *
  * TAREFA: 3.2. AppointmentCalendar.tsx
  * CORREÇÃO: Padronização de dados (camelCase), correção de acesso a objetos aninhados
- * e uso consistente de dayjs (DRY).
+ * e correção crítica de importação de tipos do monorepo.
  */
 
 import { useState, useMemo } from 'react';
@@ -41,7 +41,8 @@ import { ConfirmationModal } from '@/packages/ui/confirmation-modal';
 import { useToast } from '@/packages/ui/use-toast';
 
 // Tipos
-import type { AppointmentType, ProfessionalType } from '@/packages/shared-types';
+// CORREÇÃO: Importação pelo nome do pacote no Monorepo (Item #6 do Plano)
+import type { AppointmentType, ProfessionalType } from '@salonflow/shared-types';
 
 // Configura o Day.js para português
 dayjs.locale('pt-br');
@@ -140,9 +141,8 @@ export function AppointmentCalendar() {
     return [allOption, ...professionals];
   }, [professionals]);
 
-  // Agrupamento de agendamentos por hora (Corrigido para camelCase)
+  // Agrupamento de agendamentos por hora (CamelCase mantido conforme plano)
   const groupedAppointments = useMemo(() => {
-    // CORREÇÃO: Uso de appointmentDate (camelCase)
     const sortedAppointments = [...appointments].sort(
       (a, b) =>
         new Date(a.appointmentDate).getTime() -
@@ -151,7 +151,6 @@ export function AppointmentCalendar() {
 
     return sortedAppointments.reduce(
       (acc, app) => {
-        // CORREÇÃO: Uso de appointmentDate (camelCase)
         const time = dayjs(app.appointmentDate).format('HH:mm');
         if (!acc[time]) acc[time] = [];
         acc[time].push(app);
@@ -355,8 +354,8 @@ export function AppointmentCalendar() {
                             (p) => p.id === app.professionalId,
                           );
                           
-                          // CORREÇÃO: Acesso seguro a objetos aninhados (service.name, client.name)
-                          // e fallback para o objeto professional encontrado localmente.
+                          // CORREÇÃO: Acesso a objetos aninhados (Solução KISS)
+                          // O Backend deve retornar client: { name } e service: { name }
                           const serviceName = app.service?.name || 'Serviço não encontrado';
                           const clientName = app.client?.name || 'Cliente não encontrado';
                           const professionalName = professional?.name || app.professional?.name || 'Profissional não encontrado';
@@ -443,7 +442,7 @@ export function AppointmentCalendar() {
         onClose={() => setIsDeleteModalOpen(false)}
         onConfirm={handleDeleteConfirm}
         title="Excluir Agendamento"
-        // CORREÇÃO: Acesso a client.name aninhado
+        // CORREÇÃO: Acesso aninhado a client.name para modal
         message={`Tem certeza que deseja excluir o agendamento para "${
           appointmentToDelete?.client?.name || 'Cliente'
         }"?`}

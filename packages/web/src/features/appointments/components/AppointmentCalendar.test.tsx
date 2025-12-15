@@ -1,8 +1,9 @@
 /*
  * /packages/web/src/features/appointments/components/AppointmentCalendar.test.tsx
  *
- * TAREFA: 4.8 (Testes) - AppointmentCalendar.test.tsx
- * CORREÇÃO: Ajuste de Schema (CamelCase e Relacionamentos)
+ * Princípios Aplicados:
+ * - 2.15 (PTE): Mocks refletem estritamente o contrato real da API.
+ * - 2.3 (KISS): Estrutura de dados simplificada e legível.
  */
 
 import {
@@ -13,19 +14,19 @@ import {
 } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { AppointmentCalendar } from './AppointmentCalendar';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
-// Mocks dos Hooks de Dados (Nível 3)
+// Mocks dos Hooks de Dados (Nível 3 - PGEC)
 import { useAppointmentsQuery } from '../hooks/useAppointmentsQuery';
 import { useDeleteAppointmentMutation } from '../hooks/useDeleteAppointmentMutation';
 import { useProfessionalsQuery } from '@/features/professionals/hooks/useProfessionalsQuery';
 
-// Mocks de UI (Nível 1)
+// Mocks de UI
 import { useToast } from '@/packages/ui/use-toast';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 // --- Configuração dos Mocks ---
 
-// 1. Mocks de Componentes de UI
+// 1. Mocks de Componentes de UI e Hooks Utilitários
 vi.mock('@/packages/ui/use-toast', () => ({
   useToast: () => ({
     toast: vi.fn(),
@@ -67,47 +68,46 @@ vi.mock('../hooks/useAppointmentsQuery');
 vi.mock('../hooks/useDeleteAppointmentMutation');
 vi.mock('@/features/professionals/hooks/useProfessionalsQuery');
 
-// Cast dos mocks para tipagem
+// Cast dos mocks para tipagem correta
 const mockedUseAppointmentsQuery = vi.mocked(useAppointmentsQuery);
 const mockedUseProfessionalsQuery = vi.mocked(useProfessionalsQuery);
 const mockedUseDeleteAppointmentMutation = vi.mocked(
   useDeleteAppointmentMutation,
 );
 
-// --- Dados de Teste ---
+// --- Dados de Teste (Alinhados com o Backend Drizzle) ---
 
 const mockProfessionals = [
   {
     id: 1,
     name: 'Dr. Teste',
     color: '#ff0000',
-    workStartTime: '09:00', // Atualizado para camelCase por precaução
+    workStartTime: '09:00',
     workEndTime: '18:00',
     lunchStartTime: '12:00',
     lunchEndTime: '13:00',
   },
 ];
 
-// ATUALIZAÇÃO: Estrutura ajustada para camelCase e objetos aninhados
-// conforme o novo padrão do backend (Drizzle ORM)
 const mockAppointments = [
   {
     id: 101,
-    appointmentDate: '2025-11-14T10:00:00Z', // CORRIGIDO: snake_case -> camelCase
-    endDate: '2025-11-14T11:00:00Z',         // CORRIGIDO: snake_case -> camelCase
+    appointmentDate: '2025-11-14T10:00:00Z', // CamelCase (Princípio 2.17)
+    endDate: '2025-11-14T11:00:00Z',         // CamelCase
     client: {
       id: 1,
-      name: 'Cliente A' // CORRIGIDO: objeto aninhado
+      name: 'Cliente A', // Objeto Aninhado (KISS/Drizzle)
     },
     service: {
       id: 1,
-      name: 'Corte'     // CORRIGIDO: objeto aninhado
+      name: 'Corte',     // Objeto Aninhado
     },
     professional: {
       id: 1,
-      name: 'Dr. Teste'
+      name: 'Dr. Teste',
+      color: '#ff0000', // Campo retornado pela query do backend
     },
-    professionalId: 1, // CORRIGIDO
+    professionalId: 1, // Mantido na raiz para filtragem rápida
     notes: '',
     status: 'CONFIRMED',
   },
@@ -117,15 +117,16 @@ const mockAppointments = [
     endDate: '2025-11-14T14:30:00Z',
     client: {
       id: 2,
-      name: 'Cliente B'
+      name: 'Cliente B',
     },
     service: {
       id: 2,
-      name: 'Barba'
+      name: 'Barba',
     },
     professional: {
       id: 1,
-      name: 'Dr. Teste'
+      name: 'Dr. Teste',
+      color: '#ff0000',
     },
     professionalId: 1,
     notes: '',
@@ -133,14 +134,15 @@ const mockAppointments = [
   },
 ];
 
-// Helper para renderização com QueryClient
+// Helper para renderização com QueryClient (Necessário para React Query)
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      retry: false, // Desabilita retries para testes
+      retry: false,
     },
   },
 });
+
 const renderComponent = () => {
   return render(
     <QueryClientProvider client={queryClient}>
@@ -155,21 +157,23 @@ describe('AppointmentCalendar', () => {
   beforeEach(() => {
     vi.clearAllMocks();
 
-    // Mock para data fixa (Hoje = 14/11/2025)
+    // Mock para data fixa (Hoje = 14/11/2025 - Sexta-feira)
     vi.useFakeTimers();
-    vi.setSystemTime(new Date('2025-11-14T09:00:00Z')); // Uma sexta-feira
+    vi.setSystemTime(new Date('2025-11-14T09:00:00Z'));
 
-    // Configuração padrão (Happy Path, mas sem dados)
+    // Configuração padrão (Happy Path)
     mockedUseAppointmentsQuery.mockReturnValue({
       data: [],
       isLoading: false,
       isError: false,
     } as any);
+    
     mockedUseProfessionalsQuery.mockReturnValue({
       data: mockProfessionals,
       isLoading: false,
       isError: false,
     } as any);
+
     mockedUseDeleteAppointmentMutation.mockReturnValue({
       mutate: vi.fn(),
       isPending: false,
@@ -180,7 +184,7 @@ describe('AppointmentCalendar', () => {
     vi.useRealTimers();
   });
 
-  // Teste de Renderização (Requisito do Plano)
+  // Teste de Renderização e Estados
   it('deve renderizar o spinner de carregamento (loading state)', () => {
     mockedUseAppointmentsQuery.mockReturnValue({
       data: [],
@@ -193,12 +197,9 @@ describe('AppointmentCalendar', () => {
   });
 
   it('deve renderizar o estado vazio se não houver agendamentos', () => {
-    // Os mocks padrão do beforeEach já retornam data: []
     renderComponent();
 
-    // Verifica se o spinner sumiu
     expect(screen.queryByTestId('loading-spinner')).not.toBeInTheDocument();
-    // Verifica o estado vazio
     expect(screen.getByText('Nenhum agendamento')).toBeInTheDocument();
     expect(
       screen.getByText(
@@ -207,21 +208,20 @@ describe('AppointmentCalendar', () => {
     ).toBeInTheDocument();
   });
 
-  it('deve renderizar os agendamentos quando houver dados (data state)', () => {
+  it('deve renderizar os agendamentos corretamente quando houver dados (data state)', () => {
     mockedUseAppointmentsQuery.mockReturnValue({
       data: mockAppointments,
       isLoading: false,
     } as any);
     renderComponent();
 
-    // Verifica se o estado vazio NÃO está presente
     expect(screen.queryByText('Nenhum agendamento')).not.toBeInTheDocument();
 
-    // Verifica os dados usando as novas estruturas
-    expect(screen.getByText('Cliente A')).toBeInTheDocument();
-    expect(screen.getByText('Corte')).toBeInTheDocument();
+    // Valida renderização usando dados aninhados
+    expect(screen.getByText('Cliente A')).toBeInTheDocument(); // client.name
+    expect(screen.getByText('Corte')).toBeInTheDocument();     // service.name
     
-    // O cálculo de tempo deve funcionar baseando-se em appointmentDate/endDate
+    // Valida cálculo de duração baseado nas datas CamelCase
     expect(screen.getByText('60 min')).toBeInTheDocument();
 
     expect(screen.getByText('Cliente B')).toBeInTheDocument();
@@ -232,7 +232,6 @@ describe('AppointmentCalendar', () => {
   // Testes de Interação (UI)
   it('deve abrir o modal de novo agendamento ao clicar em "Agendar" (desktop)', async () => {
     renderComponent();
-    // Botão Desktop
     const newButton = screen.getByRole('button', { name: /Agendar/i });
     fireEvent.click(newButton);
 
@@ -244,7 +243,6 @@ describe('AppointmentCalendar', () => {
 
   it('deve abrir o modal de novo agendamento ao clicar no FAB (mobile)', async () => {
     renderComponent();
-    // Botão FAB (Mobile)
     const fabButton = screen.getByRole('button', {
       name: /Novo Agendamento/i,
     });
@@ -258,12 +256,11 @@ describe('AppointmentCalendar', () => {
 
   it('deve abrir o modal de edição ao clicar em um agendamento', async () => {
     mockedUseAppointmentsQuery.mockReturnValue({
-      data: [mockAppointments[0]], // Apenas 1 agendamento
+      data: [mockAppointments[0]], 
       isLoading: false,
     } as any);
     renderComponent();
 
-    // Clica no card (pelo nome do cliente)
     const appointmentCard = screen.getByText('Cliente A');
     fireEvent.click(appointmentCard);
 
@@ -273,25 +270,22 @@ describe('AppointmentCalendar', () => {
     });
   });
 
-  // Testes de Interação (Hooks)
+  // Testes de Interação (Hooks & Filtros)
   it('deve chamar useAppointmentsQuery com a data anterior ao clicar em "prev"', async () => {
     renderComponent();
 
-    // Data atual: 'sexta-feira, 14 de novembro'
     expect(
       screen.getByText('sexta-feira, 14 de novembro'),
     ).toBeInTheDocument();
 
-    // Encontra o botão "anterior" (o primeiro ChevronLeft)
-    const prevButton = screen.getAllByRole('button')[1]; // Posição frágil, mas funciona
+    const prevButton = screen.getAllByRole('button')[1];
     fireEvent.click(prevButton);
 
     await waitFor(() => {
-      // Verifica se a data do cabeçalho mudou
       expect(
         screen.getByText('quinta-feira, 13 de novembro'),
       ).toBeInTheDocument();
-      // Verifica se o hook foi chamado com a nova data
+      
       expect(mockedUseAppointmentsQuery).toHaveBeenLastCalledWith(
         expect.objectContaining({
           date: '2025-11-13',
@@ -306,7 +300,6 @@ describe('AppointmentCalendar', () => {
       screen.getByText('sexta-feira, 14 de novembro'),
     ).toBeInTheDocument();
 
-    // Encontra o botão "próximo" (último botão no header)
     const nextButton = screen.getAllByRole('button')[2];
     fireEvent.click(nextButton);
 
@@ -325,22 +318,19 @@ describe('AppointmentCalendar', () => {
   it('deve chamar useAppointmentsQuery com o ID do profissional ao filtrar', async () => {
     renderComponent();
 
-    // Encontra o gatilho do Select
     const selectTrigger = screen.getByRole('combobox');
     expect(screen.getByText('Todos os Profissionais')).toBeInTheDocument();
-    fireEvent.mouseDown(selectTrigger); // Abre o select
+    fireEvent.mouseDown(selectTrigger);
 
-    // Encontra e clica na opção (mockProfessional[0].name)
     const option = await screen.findByRole('option', { name: 'Dr. Teste' });
     fireEvent.click(option);
 
     await waitFor(() => {
-      // Verifica se o valor do select mudou
       expect(screen.getByText('Dr. Teste')).toBeInTheDocument();
-      // Verifica se o hook foi chamado com o ID
+      
       expect(mockedUseAppointmentsQuery).toHaveBeenLastCalledWith(
         expect.objectContaining({
-          professionalId: 1, // CORRIGIDO: professional_id -> professionalId
+          professionalId: 1, // Filtro por CamelCase
         }),
       );
     });
