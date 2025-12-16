@@ -1,9 +1,11 @@
 /**
  * /packages/api/src/features/financial/financial.handlers.ts
  *
- * (Executor: Implementação Tática - Passo 3 Refatoração)
+ * (Executor: Implementação Tática - Passo 3 Refatoração - CORREÇÃO MVP)
  *
  * Atualizado para suportar o padrão CamelCase <-> SnakeCase automático.
+ * Correção aplicada: financialTransactions -> financialEntries
+ *
  * * Princípios Aplicados:
  * - DIP (2.9): Injeção do DB via Context.
  * - DSpP (2.16): RLS/Tenancy via user.id em todas as queries.
@@ -13,8 +15,8 @@
 import type { Context } from 'hono';
 import { Variables } from '../../types';
 import { eq, desc, and } from 'drizzle-orm';
-// O schema agora exporta as chaves em camelCase (ex: userId) mapeadas para colunas snake_case (user_id)
-import { financialTransactions } from '@db/schema';
+// CORREÇÃO CRÍTICA: Importando a tabela correta 'financialEntries'
+import { financialEntries } from '@db/schema';
 
 // Define o tipo do Contexto com as Variáveis injetadas para type safety
 type FinancialContext = Context<{ Variables: Variables }>;
@@ -30,10 +32,9 @@ export const getFinancialTransactions = async (c: FinancialContext) => {
   try {
     const data = await db
       .select()
-      .from(financialTransactions)
-      // A chave agora é .userId (camelCase) vinda do schema atualizado
-      .where(eq(financialTransactions.userId, user.id))
-      .orderBy(desc(financialTransactions.date)); 
+      .from(financialEntries) // Corrigido
+      .where(eq(financialEntries.userId, user.id)) // Corrigido
+      .orderBy(desc(financialEntries.date)); // Corrigido
 
     return c.json(data);
   } catch (error) {
@@ -55,11 +56,11 @@ export const getFinancialTransactionById = async (c: FinancialContext) => {
   try {
     const data = await db
       .select()
-      .from(financialTransactions)
+      .from(financialEntries) // Corrigido
       .where(
         and(
-          eq(financialTransactions.id, id),
-          eq(financialTransactions.userId, user.id), // RLS/Tenancy
+          eq(financialEntries.id, id), // Corrigido
+          eq(financialEntries.userId, user.id), // RLS/Tenancy
         ),
       );
 
@@ -83,19 +84,17 @@ export const createFinancialTransaction = async (c: FinancialContext) => {
   const user = c.var.user;
   
   // O payload já está em camelCase (validado pelo Zod no Passo 2)
-  // Ex: { amount: 100, paymentMethod: 'pix', ... }
   const newTransaction = c.req.valid('json');
 
   try {
     const data = await db
-      .insert(financialTransactions)
+      .insert(financialEntries) // Corrigido
       .values({
         ...newTransaction,
         userId: user.id, // Garante associação ao usuário logado
       })
       .returning();
 
-    // O retorno do Drizzle também será em camelCase automaticamente (Passo 1)
     return c.json(data[0], 201);
   } catch (error) {
     console.error('Error creating transaction:', error);
@@ -112,17 +111,16 @@ export const updateFinancialTransaction = async (c: FinancialContext) => {
   const user = c.var.user;
   const { id } = c.req.param();
   
-  // Payload em camelCase
   const updatedValues = c.req.valid('json');
 
   try {
     const data = await db
-      .update(financialTransactions)
-      .set(updatedValues) // Drizzle mapeia automaticamente camelCase -> snake_case
+      .update(financialEntries) // Corrigido
+      .set(updatedValues)
       .where(
         and(
-          eq(financialTransactions.id, id),
-          eq(financialTransactions.userId, user.id), // RLS/Tenancy
+          eq(financialEntries.id, id), // Corrigido
+          eq(financialEntries.userId, user.id), // RLS/Tenancy
         ),
       )
       .returning();
@@ -149,11 +147,11 @@ export const deleteFinancialTransaction = async (c: FinancialContext) => {
 
   try {
     const data = await db
-      .delete(financialTransactions)
+      .delete(financialEntries) // Corrigido
       .where(
         and(
-          eq(financialTransactions.id, id),
-          eq(financialTransactions.userId, user.id), // RLS/Tenancy
+          eq(financialEntries.id, id), // Corrigido
+          eq(financialEntries.userId, user.id), // RLS/Tenancy
         ),
       )
       .returning();

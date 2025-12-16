@@ -1,13 +1,13 @@
 /**
  * /packages/api/src/features/dashboard/dashboard.handlers.ts
  *
- * (Executor: Implementação da Feature Dashboard - Refatorado para Padrão Ouro)
+ * (Executor: Implementação da Feature Dashboard - Ajuste MVP "Attended Only")
  *
  * Responsabilidade: Lógica de negócios para cálculo de KPIs e Gráficos.
  * Princípios:
  * - DIP (2.9): Usa c.var.db (Drizzle) e c.var.user.
  * - Tenancy (2.16): Filtra estritamente por user.id.
- * - Clean Code (2.2/2.3): Uso de camelCase conforme Passo 3 do refactor.
+ * - KISS (2.3): Lógica simples para MVP (Dashboard reflete realidade, não previsão).
  */
 
 import { Context } from 'hono';
@@ -19,7 +19,7 @@ type HandlerContext = Context<{ Variables: Variables }>;
 
 /**
  * GET /stats
- * Retorna estatísticas do dia atual: Faturamento, Agendamentos e Ticket Médio.
+ * Retorna estatísticas do dia atual: Faturamento, Agendamentos REALIZADOS e Ticket Médio.
  */
 export const getDashboardStats = async (c: HandlerContext) => {
   const db = c.var.db;
@@ -35,7 +35,6 @@ export const getDashboardStats = async (c: HandlerContext) => {
 
   try {
     // 1. Calcular Faturamento do Dia (Financial Entries)
-    // Refatorado: Acessa propriedades em camelCase (userId, entryDate, type)
     const earningsResult = await db
       .select({ 
         total: sql<number>`sum(${financialEntries.amount})` 
@@ -43,16 +42,16 @@ export const getDashboardStats = async (c: HandlerContext) => {
       .from(financialEntries)
       .where(
         and(
-          eq(financialEntries.userId, user.id),    // Mapeamento automático de user_id
-          eq(financialEntries.entryDate, todayString), // Mapeamento automático de entry_date
+          eq(financialEntries.userId, user.id),    // Tenancy enforcement 
+          eq(financialEntries.entryDate, todayString), 
           eq(financialEntries.type, 'receita')
         )
       );
     
     const dailyEarnings = Number(earningsResult[0]?.total) || 0;
 
-    // 2. Contar Agendamentos do Dia (Appointments)
-    // Refatorado: Acessa propriedades em camelCase (userId, appointmentDate)
+    // 2. Contar Agendamentos REALIZADOS do Dia (Appointments)
+    // Correção MVP: Conta apenas onde attended = true
     const appointmentsResult = await db
       .select({ 
         count: sql<number>`count(*)` 
@@ -60,20 +59,21 @@ export const getDashboardStats = async (c: HandlerContext) => {
       .from(appointments)
       .where(
         and(
-          eq(appointments.userId, user.id), // Tenancy enforcement [cite: 113]
+          eq(appointments.userId, user.id), 
           gte(appointments.appointmentDate, startOfDay),
-          lte(appointments.appointmentDate, endOfDay)
+          lte(appointments.appointmentDate, endOfDay),
+          eq(appointments.attended, true) // <--- CORREÇÃO APLICADA AQUI
         )
       );
 
     const appointmentsCount = Number(appointmentsResult[0]?.count) || 0;
 
     // 3. Calcular Ticket Médio
+    // A divisão agora é mais precisa, pois usa apenas cortes que geraram (ou deveriam gerar) receita
     const averageTicket = appointmentsCount > 0 
       ? Math.round(dailyEarnings / appointmentsCount) 
       : 0;
 
-    // Retorno em camelCase para o Frontend (Passo 4)
     return c.json({
       dailyEarnings,
       attendedAppointments: appointmentsCount,
@@ -94,17 +94,14 @@ export const getWeeklyChart = async (c: HandlerContext) => {
   const db = c.var.db;
   const user = c.var.user;
 
-  // Data de 7 dias atrás
   const sevenDaysAgo = new Date();
   sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
   const dateString = sevenDaysAgo.toISOString().split('T')[0];
 
   try {
-    // Agrega as receitas por dia
-    // Nota: O Drizzle faz o map de 'entry_date' para 'entryDate' automaticamente
     const chartData = await db
       .select({
-        date: financialEntries.entryDate, // camelCase no select
+        date: financialEntries.entryDate,
         amount: sql<number>`sum(${financialEntries.amount})`.mapWith(Number)
       })
       .from(financialEntries)
@@ -118,8 +115,6 @@ export const getWeeklyChart = async (c: HandlerContext) => {
       .groupBy(financialEntries.entryDate)
       .orderBy(financialEntries.entryDate);
 
-    // Formata o retorno para o frontend
-    // Garante que o objeto final tenha chaves em camelCase
     const formattedData = chartData.map(item => ({
       date: item.date,
       amount: item.amount || 0,

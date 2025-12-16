@@ -1,19 +1,15 @@
 /**
  * /packages/api/src/features/financial/financial.handlers.test.ts
  *
- * (Executor: Implementação Tática - Passo 3: A Lógica)
+ * (Executor: Implementação Tática - Passo 3: A Lógica - CORREÇÃO MVP)
  *
  * Testes unitários para os handlers de 'financial'.
  *
  * Alterações "Padrão Ouro":
- * - [cite_start]Inputs e Outputs agora são estritamente camelCase[cite: 1, 2].
+ * - Inputs e Outputs agora são estritamente camelCase.
  * - Mock do retorno do DB inclui campos de auditoria (createdAt, updatedAt).
  * - Remoção de qualquer lógica de conversão manual; confia-se no Drizzle.
- *
- * Princípios Aplicados:
- * - [cite_start]PTE (2.15): Testes unitários focados na lógica pura do handler[cite: 100].
- * - [cite_start]DIP (2.9): Inversão de dependência mockando c.var.db[cite: 58].
- * - [cite_start]DRY (2.2): Reutilização de mocks no beforeEach[cite: 14].
+ * - CORREÇÃO CRÍTICA: financialTransactions -> financialEntries
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -24,16 +20,17 @@ import {
   updateFinancialTransaction,
   deleteFinancialTransaction,
 } from './financial.handlers';
-import { financialTransactions } from '@db/schema';
+// CORREÇÃO: Importando a tabela correta
+import { financialEntries } from '@db/schema';
 
 // Mock do schema
 vi.mock('@db/schema', () => ({
-  financialTransactions: {
+  financialEntries: { // CORREÇÃO: Mock da tabela correta
     // Apenas referência para o mock
   },
 }));
 
-[cite_start]// Mock do Drizzle (c.var.db) [cite: 58, 62]
+// Mock do Drizzle (c.var.db)
 const mockDb = {
   select: vi.fn().mockReturnThis(),
   from: vi.fn().mockReturnThis(),
@@ -112,7 +109,8 @@ describe('Financial Handlers', () => {
       await getFinancialTransactions(mockContext as any);
 
       expect(mockDb.select).toHaveBeenCalled();
-      expect(mockDb.from).toHaveBeenCalledWith(financialTransactions);
+      // CORREÇÃO: Verifica uso da tabela correta
+      expect(mockDb.from).toHaveBeenCalledWith(financialEntries);
       expect(mockDb.where).toHaveBeenCalled(); // Verifica filtro por userId
       expect(mockDb.orderBy).toHaveBeenCalled();
       expect(mockContext.json).toHaveBeenCalledWith(mockData);
@@ -137,7 +135,8 @@ describe('Financial Handlers', () => {
 
       expect(mockContext.req.param).toHaveBeenCalled();
       expect(mockDb.select).toHaveBeenCalled();
-      expect(mockDb.from).toHaveBeenCalledWith(financialTransactions);
+      // CORREÇÃO: Verifica uso da tabela correta
+      expect(mockDb.from).toHaveBeenCalledWith(financialEntries);
       expect(mockDb.where).toHaveBeenCalled();
       expect(mockContext.json).toHaveBeenCalledWith(mockData);
     });
@@ -155,14 +154,14 @@ describe('Financial Handlers', () => {
     });
   });
 
-  // Cenário de Escrita (Command) - Reflete Passo 3 do plano
+  // Cenário de Escrita (Command)
   describe('createFinancialTransaction', () => {
     it('should create a new transaction using camelCase payload', async () => {
       // Input: camelCase (Zod valida e entrega camelCase)
       const newTransactionInput = {
         description: 'New Project',
         amount: 1000,
-        categoryId: 'cat-1', // Exemplo de propriedade camelCase
+        categoryId: 'cat-1',
         date: new Date(),
       };
 
@@ -181,10 +180,9 @@ describe('Financial Handlers', () => {
       await createFinancialTransaction(mockContext as any);
 
       expect(mockContext.req.valid).toHaveBeenCalledWith('json');
-      expect(mockDb.insert).toHaveBeenCalledWith(financialTransactions);
+      // CORREÇÃO: Verifica uso da tabela correta
+      expect(mockDb.insert).toHaveBeenCalledWith(financialEntries);
       
-      // Verificação Crítica: O handler deve passar camelCase para o Drizzle.
-      // O schema do Drizzle fará a conversão para snake_case no SQL internamente.
       expect(mockDb.values).toHaveBeenCalledWith({
         ...newTransactionInput,
         userId: mockUser.id,
@@ -205,7 +203,7 @@ describe('Financial Handlers', () => {
         amount: 100,
         userId: 'user-123',
         createdAt: new Date(),
-        updatedAt: new Date(), // updated_at atualizado
+        updatedAt: new Date(),
       };
 
       mockContext.req.param.mockReturnValue({ id: 'tx-1' });
@@ -216,11 +214,10 @@ describe('Financial Handlers', () => {
 
       expect(mockContext.req.param).toHaveBeenCalled();
       expect(mockContext.req.valid).toHaveBeenCalledWith('json');
-      expect(mockDb.update).toHaveBeenCalledWith(financialTransactions);
+      // CORREÇÃO: Verifica uso da tabela correta
+      expect(mockDb.update).toHaveBeenCalledWith(financialEntries);
       
-      // Verifica se o payload de atualização foi passado corretamente (camelCase)
       expect(mockDb.set).toHaveBeenCalledWith(updatedDataInput);
-      
       expect(mockDb.where).toHaveBeenCalled();
       expect(mockDb.returning).toHaveBeenCalled();
       expect(mockContext.json).toHaveBeenCalledWith(updatedTransaction);
@@ -253,7 +250,8 @@ describe('Financial Handlers', () => {
       await deleteFinancialTransaction(mockContext as any);
 
       expect(mockContext.req.param).toHaveBeenCalled();
-      expect(mockDb.delete).toHaveBeenCalledWith(financialTransactions);
+      // CORREÇÃO: Verifica uso da tabela correta
+      expect(mockDb.delete).toHaveBeenCalledWith(financialEntries);
       expect(mockDb.where).toHaveBeenCalled();
       expect(mockDb.returning).toHaveBeenCalled();
       expect(mockContext.json).toHaveBeenCalledWith(deletedTransaction);
