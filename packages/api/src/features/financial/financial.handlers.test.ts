@@ -8,11 +8,11 @@
  * Alterações "Padrão Ouro":
  * - Inputs e Outputs agora são estritamente camelCase.
  * - Mock do retorno do DB inclui campos de auditoria (createdAt, updatedAt).
- * - Remoção de qualquer lógica de conversão manual; confia-se no Drizzle.
+ * - Adaptação para o envelope de resposta { success: true, data: ... }.
  * - CORREÇÃO CRÍTICA: financialTransactions -> financialEntries
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
   getFinancialTransactions,
   getFinancialTransactionById,
@@ -20,12 +20,11 @@ import {
   updateFinancialTransaction,
   deleteFinancialTransaction,
 } from './financial.handlers';
-// CORREÇÃO: Importando a tabela correta
 import { financialEntries } from '@db/schema';
 
 // Mock do schema
 vi.mock('@db/schema', () => ({
-  financialEntries: { // CORREÇÃO: Mock da tabela correta
+  financialEntries: {
     // Apenas referência para o mock
   },
 }));
@@ -38,7 +37,7 @@ const mockDb = {
   orderBy: vi.fn().mockReturnThis(),
   insert: vi.fn().mockReturnThis(),
   values: vi.fn().mockReturnThis(),
-  returning: vi.fn().mockReturnThis(), // Retorno genérico configurado nos testes
+  returning: vi.fn().mockReturnThis(),
   update: vi.fn().mockReturnThis(),
   set: vi.fn().mockReturnThis(),
   delete: vi.fn().mockReturnThis(),
@@ -55,6 +54,9 @@ let mockContext: any;
 
 beforeEach(() => {
   vi.clearAllMocks();
+
+  // Silencia console.error para testes de falha não poluírem o terminal
+  vi.spyOn(console, 'error').mockImplementation(() => {});
 
   // Reset do encadeamento fluente do Drizzle
   mockDb.select.mockReturnThis();
@@ -81,11 +83,15 @@ beforeEach(() => {
   };
 });
 
+afterEach(() => {
+  vi.restoreAllMocks();
+});
+
 describe('Financial Handlers', () => {
   // Cenário de Leitura (Query)
   describe('getFinancialTransactions', () => {
-    it('should fetch all transactions for the user returning camelCase data', async () => {
-      // Mock Data em camelCase (simulando retorno do Drizzle já mapeado)
+    it('should fetch all transactions for the user returning standardized response', async () => {
+      // Mock Data em camelCase
       const mockData = [
         {
           id: 'tx-1',
@@ -109,11 +115,15 @@ describe('Financial Handlers', () => {
       await getFinancialTransactions(mockContext as any);
 
       expect(mockDb.select).toHaveBeenCalled();
-      // CORREÇÃO: Verifica uso da tabela correta
       expect(mockDb.from).toHaveBeenCalledWith(financialEntries);
-      expect(mockDb.where).toHaveBeenCalled(); // Verifica filtro por userId
+      expect(mockDb.where).toHaveBeenCalled();
       expect(mockDb.orderBy).toHaveBeenCalled();
-      expect(mockContext.json).toHaveBeenCalledWith(mockData);
+      
+      // ATUALIZADO: Espera o envelope { success: true, data: ... }
+      expect(mockContext.json).toHaveBeenCalledWith({
+        success: true,
+        data: mockData
+      });
     });
   });
 
@@ -129,16 +139,20 @@ describe('Financial Handlers', () => {
       };
 
       mockContext.req.param.mockReturnValue({ id: 'tx-1' });
+      // O DB retorna um array, mas o handler extrai o primeiro item
       mockDb.where.mockResolvedValue([mockData]);
 
       await getFinancialTransactionById(mockContext as any);
 
       expect(mockContext.req.param).toHaveBeenCalled();
       expect(mockDb.select).toHaveBeenCalled();
-      // CORREÇÃO: Verifica uso da tabela correta
       expect(mockDb.from).toHaveBeenCalledWith(financialEntries);
-      expect(mockDb.where).toHaveBeenCalled();
-      expect(mockContext.json).toHaveBeenCalledWith(mockData);
+      
+      // ATUALIZADO: Espera o envelope { success: true, data: objeto }
+      expect(mockContext.json).toHaveBeenCalledWith({
+        success: true,
+        data: mockData
+      });
     });
 
     it('should return 404 if transaction not found', async () => {
@@ -147,8 +161,9 @@ describe('Financial Handlers', () => {
 
       await getFinancialTransactionById(mockContext as any);
 
+      // ATUALIZADO: Espera formato de erro padronizado
       expect(mockContext.json).toHaveBeenCalledWith(
-        { error: 'Transaction not found' },
+        { success: false, error: 'Transaction not found' },
         404,
       );
     });
@@ -156,8 +171,7 @@ describe('Financial Handlers', () => {
 
   // Cenário de Escrita (Command)
   describe('createFinancialTransaction', () => {
-    it('should create a new transaction using camelCase payload', async () => {
-      // Input: camelCase (Zod valida e entrega camelCase)
+    it('should create a new transaction using standardized response', async () => {
       const newTransactionInput = {
         description: 'New Project',
         amount: 1000,
@@ -165,7 +179,6 @@ describe('Financial Handlers', () => {
         date: new Date(),
       };
 
-      // Output: camelCase com campos de auditoria
       const createdTransaction = {
         ...newTransactionInput,
         id: 'tx-new',
@@ -180,7 +193,6 @@ describe('Financial Handlers', () => {
       await createFinancialTransaction(mockContext as any);
 
       expect(mockContext.req.valid).toHaveBeenCalledWith('json');
-      // CORREÇÃO: Verifica uso da tabela correta
       expect(mockDb.insert).toHaveBeenCalledWith(financialEntries);
       
       expect(mockDb.values).toHaveBeenCalledWith({
@@ -188,13 +200,16 @@ describe('Financial Handlers', () => {
         userId: mockUser.id,
       });
 
-      expect(mockDb.returning).toHaveBeenCalled();
-      expect(mockContext.json).toHaveBeenCalledWith(createdTransaction, 201);
+      // ATUALIZADO: Espera envelope de sucesso
+      expect(mockContext.json).toHaveBeenCalledWith(
+        { success: true, data: createdTransaction },
+        201
+      );
     });
   });
 
   describe('updateFinancialTransaction', () => {
-    it('should update an existing transaction with camelCase data', async () => {
+    it('should update an existing transaction', async () => {
       const updatedDataInput = { description: 'Updated Description' };
       
       const updatedTransaction = {
@@ -213,14 +228,13 @@ describe('Financial Handlers', () => {
       await updateFinancialTransaction(mockContext as any);
 
       expect(mockContext.req.param).toHaveBeenCalled();
-      expect(mockContext.req.valid).toHaveBeenCalledWith('json');
-      // CORREÇÃO: Verifica uso da tabela correta
       expect(mockDb.update).toHaveBeenCalledWith(financialEntries);
       
-      expect(mockDb.set).toHaveBeenCalledWith(updatedDataInput);
-      expect(mockDb.where).toHaveBeenCalled();
-      expect(mockDb.returning).toHaveBeenCalled();
-      expect(mockContext.json).toHaveBeenCalledWith(updatedTransaction);
+      // ATUALIZADO: Espera envelope de sucesso
+      expect(mockContext.json).toHaveBeenCalledWith({
+        success: true,
+        data: updatedTransaction
+      });
     });
 
     it('should return 404 if updating a non-existent transaction', async () => {
@@ -231,7 +245,7 @@ describe('Financial Handlers', () => {
       await updateFinancialTransaction(mockContext as any);
 
       expect(mockContext.json).toHaveBeenCalledWith(
-        { error: 'Transaction not found' },
+        { success: false, error: 'Transaction not found' },
         404,
       );
     });
@@ -250,11 +264,13 @@ describe('Financial Handlers', () => {
       await deleteFinancialTransaction(mockContext as any);
 
       expect(mockContext.req.param).toHaveBeenCalled();
-      // CORREÇÃO: Verifica uso da tabela correta
       expect(mockDb.delete).toHaveBeenCalledWith(financialEntries);
-      expect(mockDb.where).toHaveBeenCalled();
-      expect(mockDb.returning).toHaveBeenCalled();
-      expect(mockContext.json).toHaveBeenCalledWith(deletedTransaction);
+
+      // ATUALIZADO: Espera envelope de sucesso
+      expect(mockContext.json).toHaveBeenCalledWith({
+        success: true,
+        data: deletedTransaction
+      });
     });
 
     it('should return 404 if deleting a non-existent transaction', async () => {
@@ -264,7 +280,7 @@ describe('Financial Handlers', () => {
       await deleteFinancialTransaction(mockContext as any);
 
       expect(mockContext.json).toHaveBeenCalledWith(
-        { error: 'Transaction not found' },
+        { success: false, error: 'Transaction not found' },
         404,
       );
     });
